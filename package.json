@@ -6,9 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:exe": "node build-exe.cjs",
+    "build:apk": "node build-apk.cjs",
+    "electron": "electron ."
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.16.0",
     "react": "^19.0.0",
@@ -17,6 +23,47 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^44.8.0",
+    "electron-builder": "^26.15.3",
     "vite": "^6.2.0"
+  },
+  "main": "electron-main.js",
+  "build": {
+    "appId": "com.ekdant.attendance",
+    "productName": "EkdantAttendance",
+    "copyright": "Copyright 2024 Ekdant Shop",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-main.js"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/favicon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": [
+        "en_US"
+      ]
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Office"
+    }
   }
 }

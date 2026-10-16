@@ -3,31 +3,17 @@
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║        EKDANT ATTENDANCE — Android APK Builder                  ║
  * ║  Uses Capacitor + Android SDK to build a real Android APK       ║
- * ║  Run: node build-apk.js                                         ║
+ * ║  Run: node build-apk.cjs  (or  npm run build:apk)               ║
  * ╚══════════════════════════════════════════════════════════════════╝
- *
- * Prerequisites you must install MANUALLY before running this script:
- *   1. Java JDK 17+     → https://adoptium.net/
- *   2. Android Studio   → https://developer.android.com/studio
- *      (includes Android SDK, SDK Build-Tools 34, platform 34)
- *   3. Set ANDROID_HOME environment variable to your SDK path:
- *      e.g. C:\Users\<you>\AppData\Local\Android\Sdk
- *
- * The script auto-installs:
- *   • @capacitor/core
- *   • @capacitor/cli
- *   • @capacitor/android
- *
- * Output: android/app/build/outputs/apk/debug/app-debug.apk
- *   OR release (if you have a keystore configured):
- *         android/app/build/outputs/apk/release/app-release.apk
  */
 
 const { spawnSync } = require('child_process');
 const fs   = require('fs');
 const path = require('path');
+const os   = require('os');
 
 const ROOT = __dirname;
+const ANDROID_DIR = path.join(ROOT, 'android');
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 const C = {
@@ -55,28 +41,68 @@ function run(cmd, opts = {}) {
 // ─── Pre-flight check ────────────────────────────────────────────────────────
 console.log('\n' + C.bold('-- Pre-flight checks --'));
 
-const javaCheck = spawnSync('java -version', { shell: true, stdio: 'pipe' });
-if (javaCheck.status !== 0) {
-  fail('Java JDK not found! Install JDK 17+ from https://adoptium.net/');
-  fail('Then re-run this script.');
-  process.exit(1);
+// Detect JDK 21+ (check Android Studio bundled JBR first as Capacitor 8 requires Java 21)
+function detectJdk21() {
+  const candidates = [
+    'C:\\Program Files\\Android\\Android Studio\\jbr',
+    'C:\\Program Files\\Java\\jdk-21',
+    process.env.JAVA_HOME,
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(path.join(c, 'bin', process.platform === 'win32' ? 'javac.exe' : 'javac'))) {
+      return c;
+    }
+  }
+  return null;
 }
-ok('Java JDK found');
 
-if (!process.env.ANDROID_HOME && !process.env.ANDROID_SDK_ROOT) {
-  warn('ANDROID_HOME environment variable is not set.');
-  warn('Set it to your Android SDK path, e.g.:');
-  warn('  Windows: C:\\Users\\<you>\\AppData\\Local\\Android\\Sdk');
-  warn('  Mac/Linux: ~/Library/Android/sdk  OR  ~/Android/Sdk');
-  warn('Continuing anyway — Gradle may still find the SDK automatically...');
+const jdk21Path = detectJdk21();
+if (jdk21Path) {
+  process.env.JAVA_HOME = jdk21Path;
+  process.env.PATH = `${path.join(jdk21Path, 'bin')}${path.delimiter}${process.env.PATH}`;
+  ok(`Using JDK 21: ${jdk21Path}`);
 } else {
-  ok(`Android SDK: ${process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT}`);
+  const javaCheck = spawnSync('java -version', { shell: true, stdio: 'pipe' });
+  if (javaCheck.status !== 0) {
+    fail('Java JDK not found! Install JDK from Android Studio or https://adoptium.net/');
+    process.exit(1);
+  }
+  ok('Java found on PATH');
+}
+
+// Detect Android SDK
+function detectAndroidSdk() {
+  if (process.env.ANDROID_HOME && fs.existsSync(process.env.ANDROID_HOME)) {
+    return process.env.ANDROID_HOME;
+  }
+  if (process.env.ANDROID_SDK_ROOT && fs.existsSync(process.env.ANDROID_SDK_ROOT)) {
+    return process.env.ANDROID_SDK_ROOT;
+  }
+  const defaultPaths = [
+    path.join(os.homedir(), 'AppData', 'Local', 'Android', 'Sdk'),
+    path.join(os.homedir(), 'Library', 'Android', 'sdk'),
+    path.join(os.homedir(), 'Android', 'Sdk'),
+  ];
+  for (const p of defaultPaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+const sdkPath = detectAndroidSdk();
+if (sdkPath) {
+  process.env.ANDROID_HOME = sdkPath;
+  process.env.ANDROID_SDK_ROOT = sdkPath;
+  ok(`Android SDK located: ${sdkPath}`);
+} else {
+  warn('Android SDK not detected automatically.');
+  warn('Please set ANDROID_HOME or install Android Studio.');
 }
 
 // ─── Step 1: Install Capacitor packages ──────────────────────────────────────
 console.log('\n' + C.bold('-- Step 1/6  Installing Capacitor packages --'));
 run('npm install @capacitor/core @capacitor/cli @capacitor/android');
-ok('Capacitor packages installed');
+ok('Capacitor packages verified');
 
 // ─── Step 2: Build Vite web app ───────────────────────────────────────────────
 console.log('\n' + C.bold('-- Step 2/6  Building Vite web bundle --'));
@@ -107,14 +133,37 @@ fs.writeFileSync(
 ok('capacitor.config.json written');
 
 // ─── Step 4: Init Capacitor Android platform ─────────────────────────────────
-console.log('\n' + C.bold('-- Step 4/6  Adding Android platform --'));
+console.log('\n' + C.bold('-- Step 4/6  Checking Android platform --'));
 
-const androidDir = path.join(ROOT, 'android');
-if (!fs.existsSync(androidDir)) {
+if (!fs.existsSync(ANDROID_DIR)) {
   run('npx cap add android');
   ok('Android platform scaffolded -> android/');
 } else {
-  ok('android/ directory already exists — skipping cap add');
+  ok('android/ directory already exists');
+}
+
+// Ensure android/local.properties points to SDK
+if (sdkPath) {
+  const localPropsPath = path.join(ANDROID_DIR, 'local.properties');
+  const formattedSdkPath = sdkPath.replace(/\\/g, '/');
+  fs.writeFileSync(localPropsPath, `sdk.dir=${formattedSdkPath}\n`);
+  ok('android/local.properties configured with SDK path');
+}
+
+// Ensure android/gradle.properties points to JDK 21
+if (jdk21Path) {
+  const gradlePropsPath = path.join(ANDROID_DIR, 'gradle.properties');
+  if (fs.existsSync(gradlePropsPath)) {
+    let content = fs.readFileSync(gradlePropsPath, 'utf8');
+    const formattedJdk = jdk21Path.replace(/\\/g, '/');
+    if (content.includes('org.gradle.java.home=')) {
+      content = content.replace(/org\.gradle\.java\.home=.*(\r?\n|$)/, `org.gradle.java.home=${formattedJdk}\n`);
+    } else {
+      content += `\norg.gradle.java.home=${formattedJdk}\n`;
+    }
+    fs.writeFileSync(gradlePropsPath, content);
+    ok('android/gradle.properties configured with org.gradle.java.home');
+  }
 }
 
 // ─── Step 5: Sync web assets into Android project ────────────────────────────
@@ -124,30 +173,30 @@ ok('Assets synced to android/');
 
 // ─── Step 6: Build the APK via Gradle ────────────────────────────────────────
 console.log('\n' + C.bold('-- Step 6/6  Building APK with Gradle --'));
-warn('This step may take 5-10 minutes on first run (Gradle downloads dependencies)...');
+warn('Gradle is building assembleDebug inside android/ folder...');
 
 const gradleCmd = process.platform === 'win32'
-  ? '.\\android\\gradlew.bat assembleDebug'
-  : './android/gradlew assembleDebug';
+  ? '.\\gradlew.bat assembleDebug'
+  : './gradlew assembleDebug';
 
-run(gradleCmd, { cwd: ROOT });
+// Crucial: run Gradle inside the android/ directory so it finds settings.gradle and build.gradle!
+run(gradleCmd, { cwd: ANDROID_DIR });
 
 // ─── Done ─────────────────────────────────────────────────────────────────────
 const apkPath = path.join('android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-const apkExists = fs.existsSync(path.join(ROOT, apkPath));
+const fullApkPath = path.join(ROOT, apkPath);
+const apkExists = fs.existsSync(fullApkPath);
 
 console.log('\n' + C.green(C.bold('================================================')));
 if (apkExists) {
-  console.log(C.green(C.bold('  APK build complete!')));
-  console.log(C.cyan('  APK location: ') + C.bold(apkPath));
-  console.log('\n  To install on a connected Android device:');
-  console.log(C.bold('    adb install ' + apkPath));
-  console.log('\n  To open in Android Studio:');
-  console.log(C.bold('    npx cap open android'));
+  console.log(C.green(C.bold('  🎉 Android APK Build Successful!')));
+  console.log(C.cyan('  APK Path : ') + C.bold(fullApkPath));
+  console.log('\n  To install directly onto a USB-connected phone:');
+  console.log(C.bold('    adb install "' + fullApkPath + '"'));
+  console.log('\n  Or transfer the file app-debug.apk to your Android phone via USB/WhatsApp/Drive.');
 } else {
-  warn('APK may not have been generated. Check Gradle output above for errors.');
-  console.log('  Expected APK path: ' + apkPath);
-  console.log('  You can also open Android Studio and build from there:');
+  warn('Build completed but APK output not found at: ' + apkPath);
+  console.log('  You can also open Android Studio to build:');
   console.log(C.bold('    npx cap open android'));
 }
 console.log(C.green(C.bold('================================================')) + '\n');
