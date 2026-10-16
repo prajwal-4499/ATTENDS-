@@ -15,11 +15,12 @@ import {
 } from 'lucide-react';
 
 export default function StaffManager() {
-  const { staffList, saveStaff, toggleStaffActive } = useApp();
+  const { staffList, saveStaff, toggleStaffActive, deleteStaff } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingStaff, setEditingStaff] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmDeleteStaff, setConfirmDeleteStaff] = useState(null); // staff object to delete
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -265,6 +266,14 @@ export default function StaffManager() {
                           <CheckCircle size={15} color="var(--accent-success)" />
                         )}
                       </button>
+                      <button
+                        className="btn-icon"
+                        onClick={() => setConfirmDeleteStaff(staff)}
+                        title="Permanently delete staff profile"
+                        style={{ color: 'var(--accent-danger)' }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -489,6 +498,71 @@ export default function StaffManager() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Permanent Delete Confirmation Modal ─────────────────────── */}
+      {confirmDeleteStaff && (
+        <div className="modal-overlay" onClick={() => setConfirmDeleteStaff(null)}>
+          <div className="modal-content" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ color: 'var(--accent-danger)' }}>
+                🗑️ Delete Staff Profile
+              </h3>
+              <button className="btn-icon" onClick={() => setConfirmDeleteStaff(null)}>
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Warning card */}
+            <div style={{
+              background: 'var(--accent-danger-subtle)',
+              border: '1.5px solid var(--accent-danger)',
+              borderRadius: 'var(--radius-md)',
+              padding: '1rem',
+              marginBottom: '1.25rem'
+            }}>
+              <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: '0.4rem', color: 'var(--accent-danger)' }}>
+                ⚠️ This action is permanent!
+              </div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                You are about to <strong>permanently delete</strong> the profile of&nbsp;
+                <strong style={{ color: 'var(--text-primary)' }}>{confirmDeleteStaff.name}</strong>.
+                <br /><br />
+                This will also erase:
+                <ul style={{ margin: '0.35rem 0 0 1.1rem', padding: 0 }}>
+                  <li>All attendance records</li>
+                  <li>All salary &amp; advance ledger entries</li>
+                </ul>
+                <br />
+                <strong>This cannot be undone.</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setConfirmDeleteStaff(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn"
+                style={{
+                  background: 'var(--accent-danger)',
+                  color: '#fff',
+                  display: 'flex', alignItems: 'center', gap: '0.4rem'
+                }}
+                onClick={() => {
+                  deleteStaff(confirmDeleteStaff.id, confirmDeleteStaff.name);
+                  setConfirmDeleteStaff(null);
+                }}
+              >
+                <Trash2 size={15} />
+                Yes, Delete Permanently
+              </button>
+            </div>
           </div>
         </div>
       )}

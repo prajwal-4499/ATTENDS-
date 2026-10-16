@@ -377,6 +377,23 @@ export function AppProvider({ children }) {
     }
   }, [reloadFromDb, showToast]);
 
+  // Permanently delete a staff member and ALL their data
+  const deleteStaff = useCallback((staffId, staffName) => {
+    try {
+      // Remove attendance records
+      run("DELETE FROM attendance WHERE staff_id = ?", [staffId]);
+      // Remove salary ledger entries
+      run("DELETE FROM salary_ledger WHERE staff_id = ?", [staffId]);
+      // Remove the staff record itself
+      run("DELETE FROM staff WHERE id = ?", [staffId]);
+      reloadFromDb();
+      showToast(`${staffName} permanently deleted`, 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to delete staff: ' + err.message, 'error');
+    }
+  }, [reloadFromDb, showToast]);
+
   // Salary Ledger: Add Advance / Bonus / Deduction / Payout
   const addLedgerTransaction = useCallback((data) => {
     try {
@@ -484,6 +501,7 @@ export function AppProvider({ children }) {
         kioskPunchOut,
         saveStaff,
         toggleStaffActive,
+        deleteStaff,
         addLedgerTransaction,
         deleteLedgerTransaction,
         downloadSqliteBackup,
