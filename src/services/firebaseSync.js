@@ -15,6 +15,16 @@ import {
   writeBatch,
   serverTimestamp
 } from 'firebase/firestore';
+// User's default Firebase Project Credentials
+export const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyATPVOcNludcCxP7o4pMz8uztAeNDzWgJ8",
+  authDomain: "attends-90293.firebaseapp.com",
+  projectId: "attends-90293",
+  storageBucket: "attends-90293.firebasestorage.app",
+  messagingSenderId: "635522918417",
+  appId: "1:635522918417:web:79a44b798818dba710a9b0",
+  measurementId: "G-7BP8JWX63W"
+};
 
 const CONFIG_STORAGE_KEY = 'attends_firebase_config';
 const SHOP_CODE_STORAGE_KEY = 'attends_shop_code';
@@ -26,22 +36,22 @@ let firestoreDb = null;
 let activeUnsubscribers = [];
 
 /**
- * Get stored Firebase configuration
+ * Get stored Firebase configuration (falls back to DEFAULT_FIREBASE_CONFIG)
  */
 export function getStoredFirebaseConfig() {
   try {
     const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? JSON.parse(raw) : DEFAULT_FIREBASE_CONFIG;
   } catch (e) {
-    return null;
+    return DEFAULT_FIREBASE_CONFIG;
   }
 }
 
 /**
- * Get stored shop sync code (e.g. ATTENDS-SHOP-01)
+ * Get stored shop sync code (e.g. ATTENDS-MAIN)
  */
 export function getStoredShopCode() {
-  return localStorage.getItem(SHOP_CODE_STORAGE_KEY) || '';
+  return localStorage.getItem(SHOP_CODE_STORAGE_KEY) || 'ATTENDS-MAIN';
 }
 
 /**
@@ -61,8 +71,9 @@ export function initFirebaseService(customConfig = null) {
       return { initialized: false, error: 'Firebase credentials not configured yet' };
     }
 
-    if (getApps().length > 0) {
-      firebaseApp = getApp();
+    const existingApp = getApps().find(a => a.name === 'ATTENDS_SYNC');
+    if (existingApp) {
+      firebaseApp = existingApp;
     } else {
       firebaseApp = initializeApp(config, 'ATTENDS_SYNC');
     }
