@@ -68,22 +68,24 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
             <div style={{
               width: '46px',
               height: '46px',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+              borderRadius: '12px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 8px 16px rgba(99, 102, 241, 0.35)'
+              overflow: 'hidden'
             }}>
-              <Store size={24} />
+              <img
+                src="/logo.png"
+                alt="Logo"
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
             </div>
             <div>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, letterSpacing: '-0.01em' }}>
                 {isInitial ? 'Register Your Shop' : 'Shop Profile & Settings'}
               </h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
-                {isInitial ? 'Enter details once to setup your offline register' : 'Update your business information anytime'}
+                {isInitial ? 'Enter details once to setup your business profile' : 'Update your business information anytime'}
               </p>
             </div>
           </div>
@@ -244,7 +246,7 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
           }}>
             <ShieldCheck size={18} color="var(--accent-success)" style={{ flexShrink: 0 }} />
             <span>
-              All shop data is stored 100% offline on your device with <strong>automated backups saved every 2 hours</strong>.
+              All shop data is securely saved on your device with <strong>automated local backups</strong>.
             </span>
           </div>
 

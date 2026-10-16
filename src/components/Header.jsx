@@ -31,7 +31,7 @@ export default function Header() {
 
   // Time ago calculation for last auto backup
   const getBackupTimeAgo = () => {
-    if (!lastAutoBackupTime) return 'Active (2h)';
+    if (!lastAutoBackupTime) return 'Active';
     const minsAgo = Math.floor((Date.now() - lastAutoBackupTime) / 60000);
     if (minsAgo < 1) return 'Just now';
     if (minsAgo < 60) return `${minsAgo}m ago`;
@@ -48,13 +48,23 @@ export default function Header() {
           title="Click to view or edit Shop Registration details"
           style={{ cursor: 'pointer' }}
         >
-          <div className="brand-icon">
-            <Store size={22} />
+          <div className="brand-icon" style={{ background: 'transparent', boxShadow: 'none', padding: 0 }}>
+            <img
+              src="/logo.png"
+              alt="Logo"
+              style={{
+                height: '38px',
+                width: 'auto',
+                maxWidth: '72px',
+                objectFit: 'contain',
+                borderRadius: 'var(--radius-sm)'
+              }}
+            />
           </div>
           <div className="brand-info">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
               <h1 style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {shopProfile?.shop_name || 'StaffTrack Pro'}
+                {shopProfile?.shop_name || 'Ekdant Attendance'}
               </h1>
               <span className="brand-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                 <Edit2 size={10} />
@@ -62,7 +72,7 @@ export default function Header() {
               </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {shopProfile?.phone_number ? `📞 ${shopProfile.phone_number} • ` : ''}100% Offline SQLite
+              {shopProfile?.phone_number ? `📞 ${shopProfile.phone_number}` : 'Staff & Wage Management'}
             </p>
           </div>
         </div>
@@ -81,16 +91,16 @@ export default function Header() {
         </div>
 
         <div className="header-actions">
-          {/* 2-Hour Auto-Backup Badge */}
+          {/* Status Badge */}
           <button
             type="button"
             className="offline-pill"
             onClick={() => executeAutoBackup(true)}
-            title="Auto-saves database every 2 hours. Click to back up right now!"
+            title="Automated local backup active. Click to save snapshot now."
             style={{ border: 'none', cursor: 'pointer', background: 'var(--accent-success-subtle)' }}
           >
             <span className="pulse-dot"></span>
-            <span>2h Backup: {getBackupTimeAgo()}</span>
+            <span>Synced • {getBackupTimeAgo()}</span>
           </button>
 
           <button

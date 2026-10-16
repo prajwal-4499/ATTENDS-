@@ -617,9 +617,9 @@ export function AppProvider({ children }) {
       setAutoBackupHistory(newHistory);
 
       if (isManual) {
-        showToast('Auto-backup saved successfully! (Next auto-run in 2 hrs)');
+        showToast('Local backup saved successfully!');
       } else {
-        showToast('⏰ Auto-backup saved (2-hour schedule active)', 'info');
+        showToast('Local backup snapshot saved', 'info');
       }
     } catch (err) {
       console.warn('Auto backup failed:', err);

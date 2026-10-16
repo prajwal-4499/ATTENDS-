@@ -130,14 +130,14 @@ export default function BackupSync() {
     <div>
       <div className="attendance-header-actions">
         <div>
-          <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Offline Backup & Shop Registration</h2>
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Data Backup & Shop Profile</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            Automatic 2-hour local snapshots and manual SQLite / JSON backups.
+            Automated local snapshots and manual SQLite / JSON exports.
           </p>
         </div>
       </div>
 
-      {/* 2-Hour Auto-Backup System Card (FEATURED) */}
+      {/* Auto-Backup System Card (FEATURED) */}
       <div className="card" style={{
         marginBottom: '1.5rem',
         border: '1px solid var(--border-default)',
@@ -159,9 +159,9 @@ export default function BackupSync() {
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Automated 2-Hour Backups</h3>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Automated Local Backups</h3>
                 <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>
-                  ✓ Running Every 2 Hours
+                  ✓ Scheduled Auto-Backup Active
                 </span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0' }}>
@@ -177,7 +177,7 @@ export default function BackupSync() {
             style={{ padding: '0.6rem 1.25rem' }}
           >
             <RefreshCw size={16} />
-            <span>Create Auto-Backup Now</span>
+            <span>Create Backup Snapshot Now</span>
           </button>
         </div>
 
@@ -185,7 +185,7 @@ export default function BackupSync() {
         {autoBackupHistory && autoBackupHistory.length > 0 ? (
           <div>
             <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Recent 2-Hour Auto-Backup Snapshots (Last {autoBackupHistory.length})
+              Recent Backup Snapshots (Last {autoBackupHistory.length})
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {autoBackupHistory.map((item, idx) => (
