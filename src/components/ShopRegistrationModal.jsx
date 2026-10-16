@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Store, Phone, User, MapPin, CheckCircle2, ShieldCheck, Sparkles, X, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Store, Phone, User, MapPin, CheckCircle2, ShieldCheck, Sparkles, X, Clock, ToggleLeft, ToggleRight, Cloud, RefreshCw } from 'lucide-react';
 
 export default function ShopRegistrationModal({ isOpen, onClose, isInitial = false }) {
-  const { shopProfile, saveShopProfile } = useApp();
+  const { shopProfile, saveShopProfile, syncCloudNow, cloudShopCode, updateCloudSyncSettings, showToast } = useApp();
 
   const [shopName, setShopName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -11,6 +11,8 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
   const [address, setAddress] = useState('');
   const [timerTrackingEnabled, setTimerTrackingEnabled] = useState(true);
   const [error, setError] = useState('');
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [syncCode, setSyncCode] = useState(cloudShopCode || 'ATTENDS-MAIN');
 
   useEffect(() => {
     if (shopProfile) {
@@ -47,6 +49,24 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
 
     if (success && onClose) {
       onClose();
+    }
+  };
+
+  const handleSyncExistingShop = async () => {
+    setError('');
+    setIsSyncingCloud(true);
+    try {
+      if (syncCode.trim()) {
+        await updateCloudSyncSettings({ shopCode: syncCode.trim().toUpperCase(), role: 'owner' });
+      }
+      const success = await syncCloudNow();
+      if (!success) {
+        setError('Could not connect to cloud. Please check internet connection.');
+      }
+    } catch (e) {
+      setError('Sync failed: ' + e.message);
+    } finally {
+      setIsSyncingCloud(false);
     }
   };
 
@@ -107,6 +127,79 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
             marginBottom: '1rem'
           }}>
             {error}
+          </div>
+        )}
+
+        {isInitial && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(99,102,241,0.08) 100%)',
+            border: '1.5px solid var(--accent-primary-subtle)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1rem',
+            marginBottom: '1.25rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+              <Cloud size={18} color="var(--accent-primary)" />
+              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--accent-primary)' }}>
+                Already created a shop on Mobile?
+              </span>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 0.75rem 0' }}>
+              Connect with your <strong>Shop Sync Code</strong> to instantly load your shop profile, staff, and attendance.
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                value={syncCode}
+                onChange={(e) => setSyncCode(e.target.value.toUpperCase())}
+                placeholder="Shop Code (e.g. ATTENDS-MAIN)"
+                style={{
+                  flex: 1,
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  textTransform: 'uppercase',
+                  fontFamily: 'var(--font-mono)'
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSyncExistingShop}
+                disabled={isSyncingCloud}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  padding: '0.55rem 0.9rem',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <RefreshCw size={14} className={isSyncingCloud ? 'spin' : ''} />
+                <span>{isSyncingCloud ? 'Syncing...' : 'Sync Mobile Shop'}</span>
+              </button>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              margin: '1.1rem 0 0.2rem',
+              color: 'var(--text-muted)',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              letterSpacing: '0.05em'
+            }}>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+              <span style={{ padding: '0 0.5rem' }}>OR REGISTER AS NEW SHOP</span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+            </div>
           </div>
         )}
 

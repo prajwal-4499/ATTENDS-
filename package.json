@@ -31,8 +31,8 @@
   "main": "electron-main.js",
   "build": {
     "appId": "com.ekdant.attendance",
-    "productName": "ATTENDS",
-    "copyright": "Copyright 2024 ATTENDS",
+    "productName": "EkdantAttendance",
+    "copyright": "Copyright 2024 Ekdant Shop",
     "directories": {
       "output": "dist-electron"
     },
