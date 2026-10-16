@@ -375,30 +375,26 @@ export default function StaffManager() {
 
               {/* ===== PER PIECE WAGE SECTION ===== */}
               {formData.salary_type === 'PIECE_RATE' && (
-                <div style={{
-                  border: '2px solid var(--accent-purple)',
+                <div className="card" style={{
+                  padding: '1rem',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-default)',
                   borderRadius: 'var(--radius-lg)',
-                  padding: '1rem 1.25rem',
-                  background: 'var(--accent-purple-subtle)',
-                  marginBottom: '0.5rem'
+                  marginBottom: '1rem'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <span style={{ fontSize: '1.2rem' }}>🧵</span>
-                    <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--accent-purple)' }}>
-                      Per Piece Wage Configuration
-                    </span>
-                    <span style={{
-                      fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.5rem',
-                      background: 'var(--accent-purple)', color: '#fff',
-                      borderRadius: 'var(--radius-full)', marginLeft: 'auto'
-                    }}>
-                      PIECEWORK
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                      <Package size={16} color="var(--accent-primary)" />
+                      <span>Piecework Wage Setup</span>
+                    </div>
+                    <span className="badge badge-purple" style={{ fontSize: '0.72rem' }}>
+                      Per Piece Rate
                     </span>
                   </div>
 
-                  <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                    <label className="form-label" style={{ color: 'var(--accent-purple)' }}>
-                      ₹ Rate Per Piece / Unit Produced *
+                  <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                    <label className="form-label">
+                      Rate Per Piece / Unit (₹) *
                     </label>
                     <input
                       type="number"
@@ -406,34 +402,27 @@ export default function StaffManager() {
                       min="0"
                       required
                       className="form-input"
-                      style={{ borderColor: 'var(--accent-purple)', fontSize: '1.15rem', fontWeight: 800 }}
-                      placeholder="e.g. 12"
+                      style={{ fontSize: '1.1rem', fontWeight: 800, fontFamily: 'var(--font-mono)' }}
+                      placeholder="e.g. 15"
                       value={formData.per_piece_rate}
                       onChange={(e) => setFormData({ ...formData, per_piece_rate: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
 
                   <div style={{
-                    background: 'rgba(168,85,247,0.12)',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: 'var(--radius-md)',
-                    padding: '0.6rem 0.85rem',
-                    fontSize: '0.8rem',
-                    color: 'var(--accent-purple)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.3rem'
+                    padding: '0.65rem 0.85rem',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-secondary)'
                   }}>
-                    <div>📊 <strong>How earnings work:</strong></div>
-                    <div>Daily Pay = <strong>Pieces Made Today × ₹{formData.per_piece_rate || 0}/pc</strong></div>
+                    <div>⚡ Daily Pay = <strong>Pieces Made Today × ₹{formData.per_piece_rate || 0}</strong></div>
                     {formData.per_piece_rate > 0 && (
-                      <div style={{ marginTop: '0.2rem' }}>
-                        Example: 100 pieces → ₹{(100 * formData.per_piece_rate).toLocaleString()}
-                        &nbsp;| 200 pieces → ₹{(200 * formData.per_piece_rate).toLocaleString()}
+                      <div style={{ marginTop: '0.25rem', fontFamily: 'var(--font-mono)' }}>
+                        E.g.: 100 pcs = ₹{(100 * formData.per_piece_rate).toLocaleString()} | 250 pcs = ₹{(250 * formData.per_piece_rate).toLocaleString()}
                       </div>
                     )}
-                    <div style={{ marginTop: '0.25rem', fontSize: '0.74rem', opacity: 0.85 }}>
-                      ⚡ Enter daily pieces in the Attendance tab for auto salary calculation.
-                    </div>
                   </div>
                 </div>
               )}

@@ -37,6 +37,31 @@ export function AppProvider({ children }) {
   const [toast, setToast] = useState(null);
   const [dbError, setDbError] = useState(null);
 
+  // Shop Profile state
+  const [shopProfile, setShopProfile] = useState(() => {
+    try {
+      const cached = localStorage.getItem('ekdant_shop_profile');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Auto-backup state (2-hour interval)
+  const AUTO_BACKUP_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+  const [lastAutoBackupTime, setLastAutoBackupTime] = useState(() => {
+    const ts = localStorage.getItem('ekdant_last_auto_backup_ts');
+    return ts ? parseInt(ts, 10) : null;
+  });
+  const [autoBackupHistory, setAutoBackupHistory] = useState(() => {
+    try {
+      const hist = localStorage.getItem('ekdant_auto_backup_history');
+      return hist ? JSON.parse(hist) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   // Apply theme to document
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -64,6 +89,16 @@ export function AppProvider({ children }) {
       setStaffList(staffRows);
       setAttendanceRecords(attRows);
       setSalaryLedger(ledgerRows);
+
+      try {
+        const profRows = query("SELECT * FROM shop_profile ORDER BY created_at DESC LIMIT 1");
+        if (profRows && profRows.length > 0) {
+          setShopProfile(profRows[0]);
+          localStorage.setItem('ekdant_shop_profile', JSON.stringify(profRows[0]));
+        }
+      } catch (e) {
+        // Table might be initializing
+      }
     } catch (err) {
       console.error('Failed to reload from DB:', err);
     }
@@ -477,6 +512,128 @@ export function AppProvider({ children }) {
     }
   }, [reloadFromDb, showToast]);
 
+  // Save / Update Shop Profile
+  const saveShopProfile = useCallback((profileData) => {
+    try {
+      const existing = query("SELECT * FROM shop_profile LIMIT 1");
+      const id = existing.length > 0 ? existing[0].id : generateUUID();
+      const shopName = profileData.shop_name?.trim() || '';
+      const phoneNo = profileData.phone_number?.trim() || '';
+      const ownerName = profileData.owner_name?.trim() || '';
+      const address = profileData.address?.trim() || '';
+
+      if (!shopName || !phoneNo) {
+        showToast('Shop Name and Phone Number are required', 'error');
+        return false;
+      }
+
+      if (existing.length > 0) {
+        run(
+          "UPDATE shop_profile SET shop_name = ?, phone_number = ?, owner_name = ?, address = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          [shopName, phoneNo, ownerName, address, id]
+        );
+      } else {
+        run(
+          "INSERT INTO shop_profile (id, shop_name, phone_number, owner_name, address) VALUES (?, ?, ?, ?, ?)",
+          [id, shopName, phoneNo, ownerName, address]
+        );
+      }
+
+      const updated = { id, shop_name: shopName, phone_number: phoneNo, owner_name: ownerName, address };
+      setShopProfile(updated);
+      localStorage.setItem('ekdant_shop_profile', JSON.stringify(updated));
+      showToast('Shop details registered & saved successfully!');
+      return true;
+    } catch (err) {
+      showToast('Failed to save shop details: ' + err.message, 'error');
+      return false;
+    }
+  }, [showToast]);
+
+  // Execute Auto Backup (saves snapshot every 2 hours)
+  const executeAutoBackup = useCallback((isManual = false) => {
+    try {
+      const bytes = exportSqliteBytes();
+      if (!bytes || bytes.length === 0) return;
+
+      // Base64 chunked encode
+      let binaryString = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+      }
+      const base64Data = btoa(binaryString);
+      const now = Date.now();
+      const timestampStr = new Date(now).toLocaleString();
+
+      const backupItem = {
+        id: generateUUID(),
+        timestamp: now,
+        dateFormatted: timestampStr,
+        sizeBytes: bytes.length,
+        staffCount: staffList.length,
+        shopName: shopProfile?.shop_name || 'Shop',
+        data: base64Data
+      };
+
+      const existingHistory = JSON.parse(localStorage.getItem('ekdant_auto_backup_history') || '[]');
+      const newHistory = [backupItem, ...existingHistory.slice(0, 5)];
+
+      localStorage.setItem('ekdant_auto_backup_history', JSON.stringify(newHistory));
+      localStorage.setItem('ekdant_last_auto_backup_ts', String(now));
+
+      setLastAutoBackupTime(now);
+      setAutoBackupHistory(newHistory);
+
+      if (isManual) {
+        showToast('Auto-backup saved successfully! (Next auto-run in 2 hrs)');
+      } else {
+        showToast('⏰ Auto-backup saved (2-hour schedule active)', 'info');
+      }
+    } catch (err) {
+      console.warn('Auto backup failed:', err);
+    }
+  }, [staffList.length, shopProfile, showToast]);
+
+  // Check 2-hour backup timer
+  useEffect(() => {
+    if (!isDbReady) return;
+
+    const checkBackup = () => {
+      const lastTs = localStorage.getItem('ekdant_last_auto_backup_ts');
+      const now = Date.now();
+      if (!lastTs || (now - parseInt(lastTs, 10)) >= AUTO_BACKUP_INTERVAL_MS) {
+        executeAutoBackup(false);
+      }
+    };
+
+    const initialTimer = setTimeout(checkBackup, 4000);
+    const interval = setInterval(checkBackup, 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [isDbReady, executeAutoBackup, AUTO_BACKUP_INTERVAL_MS]);
+
+  // Restore from an auto-backup snapshot item
+  const restoreAutoBackupSnapshot = useCallback((backupItem) => {
+    try {
+      if (!backupItem?.data) throw new Error('Backup data is missing');
+      const binaryString = atob(backupItem.data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      importSqliteBytes(bytes);
+      reloadFromDb();
+      showToast(`Database restored from auto-backup (${backupItem.dateFormatted})!`);
+    } catch (err) {
+      showToast('Restore failed: ' + err.message, 'error');
+    }
+  }, [reloadFromDb, showToast]);
+
   return (
     <AppContext.Provider
       value={{
@@ -492,6 +649,12 @@ export function AppProvider({ children }) {
         staffList,
         attendanceRecords,
         salaryLedger,
+        shopProfile,
+        saveShopProfile,
+        lastAutoBackupTime,
+        autoBackupHistory,
+        executeAutoBackup,
+        restoreAutoBackupSnapshot,
         toast,
         showToast,
         markAttendance,

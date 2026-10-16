@@ -11,7 +11,9 @@ import {
   AlertCircle,
   UserCheck,
   Package,
-  Layers
+  Layers,
+  Plus,
+  Minus
 } from 'lucide-react';
 
 export default function AttendanceGrid() {
@@ -98,6 +100,16 @@ export default function AttendanceGrid() {
       handlePiecesBlur(staffId);
       e.target.blur();
     }
+  };
+
+  const handlePiecesStep = (staffId, delta) => {
+    const record = getRecord(staffId);
+    const saved = parseInt(record?.pieces_produced) || 0;
+    const live = piecesInputMap[staffId];
+    const current = live !== undefined ? (parseInt(live) || 0) : saved;
+    const nextVal = Math.max(0, current + delta);
+    setPiecesInputMap((prev) => ({ ...prev, [staffId]: String(nextVal) }));
+    updatePiecesProduced(staffId, nextVal);
   };
 
   return (
@@ -223,9 +235,10 @@ export default function AttendanceGrid() {
             const displayPieces = liveVal !== undefined ? liveVal : (savedPieces > 0 ? String(savedPieces) : '');
 
             return (
-              <div key={staff.id} className="staff-att-row" style={{
-                borderColor: isPieceRate ? 'rgba(168, 85, 247, 0.25)' : undefined
-              }}>
+              <div
+                key={staff.id}
+                className={`staff-att-row ${isPieceRate ? 'is-piece-worker' : ''}`}
+              >
                 {/* Identity */}
                 <div className="staff-identity">
                   {staff.photo_path ? (
@@ -247,15 +260,11 @@ export default function AttendanceGrid() {
                   </div>
 
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <div className="staff-name">{staff.name}</div>
                       {isPieceRate && (
-                        <span style={{
-                          fontSize: '0.68rem', fontWeight: 700,
-                          padding: '0.1rem 0.4rem', borderRadius: '4px',
-                          background: 'var(--accent-purple-subtle)', color: 'var(--accent-purple)'
-                        }}>
-                          PIECE RATE ₹{staff.per_piece_rate}/pc
+                        <span className="badge badge-purple" style={{ fontSize: '0.7rem' }}>
+                          Piecework • ₹{staff.per_piece_rate}/pc
                         </span>
                       )}
                     </div>
@@ -272,76 +281,88 @@ export default function AttendanceGrid() {
                 {/* Attendance Status Buttons */}
                 <div className="att-button-group">
                   <button
+                    type="button"
                     className={`att-btn present ${status === 'PRESENT' ? 'active' : ''}`}
                     onClick={() => markAttendance(staff.id, 'PRESENT')}
                     title="Mark Present"
-                  >P (Present)</button>
+                  >
+                    <span>P</span>
+                    <span className="att-btn-lbl">Present</span>
+                  </button>
                   <button
+                    type="button"
                     className={`att-btn absent ${status === 'ABSENT' ? 'active' : ''}`}
                     onClick={() => markAttendance(staff.id, 'ABSENT')}
                     title="Mark Absent"
-                  >A (Absent)</button>
+                  >
+                    <span>A</span>
+                    <span className="att-btn-lbl">Absent</span>
+                  </button>
                   <button
+                    type="button"
                     className={`att-btn halfday ${status === 'HALF_DAY' ? 'active' : ''}`}
                     onClick={() => markAttendance(staff.id, 'HALF_DAY')}
                     title="Mark Half Day"
-                  >HD (Half)</button>
+                  >
+                    <span>HD</span>
+                    <span className="att-btn-lbl">Half Day</span>
+                  </button>
                   <button
+                    type="button"
                     className={`att-btn leave ${status === 'LEAVE' ? 'active' : ''}`}
                     onClick={() => markAttendance(staff.id, 'LEAVE')}
                     title="Mark Paid Leave"
-                  >L (Leave)</button>
+                  >
+                    <span>L</span>
+                    <span className="att-btn-lbl">Leave</span>
+                  </button>
                 </div>
 
-                {/* Pieces Produced — shown for ALL staff */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                  background: isPieceRate ? 'var(--accent-purple-subtle)' : 'var(--bg-elevated)',
-                  border: isPieceRate
-                    ? '1px solid rgba(168, 85, 247, 0.35)'
-                    : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '0.35rem 0.75rem'
-                }}>
-                  <Package size={15} color={isPieceRate ? 'var(--accent-purple)' : 'var(--text-muted)'} />
-                  <span style={{
-                    fontSize: '0.78rem', fontWeight: 600,
-                    color: isPieceRate ? 'var(--accent-purple)' : 'var(--text-secondary)',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {isPieceRate ? 'Pieces Made:' : 'Pieces Today:'}
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="0"
-                    value={displayPieces}
-                    onChange={(e) => handlePiecesChange(staff.id, e.target.value)}
-                    onBlur={() => handlePiecesBlur(staff.id)}
-                    onKeyDown={(e) => handlePiecesKeyDown(e, staff.id)}
-                    style={{
-                      width: '68px',
-                      background: 'transparent',
-                      border: 'none',
-                      borderBottom: isPieceRate
-                        ? '2px solid var(--accent-purple)'
-                        : '2px solid var(--border-default)',
-                      outline: 'none',
-                      color: 'var(--text-primary)',
-                      fontWeight: 800,
-                      fontSize: '1rem',
-                      fontFamily: 'var(--font-mono)',
-                      textAlign: 'center',
-                      padding: '0.1rem 0.25rem'
-                    }}
-                  />
-                  {isPieceRate && savedPieces > 0 && (
-                    <span style={{ fontSize: '0.72rem', color: 'var(--accent-purple)', fontWeight: 600 }}>
-                      = ₹{(savedPieces * (staff.per_piece_rate || 0)).toLocaleString()}
-                    </span>
-                  )}
-                </div>
+                {/* Pieces Produced — Clean, Integrated Stepper (ONLY FOR PIECE-RATE WORKERS) */}
+                {isPieceRate ? (
+                  <div className="piece-work-stepper-box">
+                    <div className="piece-work-label">
+                      <Package size={14} color="var(--accent-primary)" />
+                      <span>Pieces Today:</span>
+                    </div>
+
+                    <div className="piece-stepper-controls">
+                      <button
+                        type="button"
+                        className="piece-step-btn"
+                        onClick={() => handlePiecesStep(staff.id, -1)}
+                        title="Decrease pieces (-1)"
+                      >
+                        <Minus size={14} />
+                      </button>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                        className="piece-input-field"
+                        value={displayPieces}
+                        onChange={(e) => handlePiecesChange(staff.id, e.target.value)}
+                        onBlur={() => handlePiecesBlur(staff.id)}
+                        onKeyDown={(e) => handlePiecesKeyDown(e, staff.id)}
+                      />
+
+                      <button
+                        type="button"
+                        className="piece-step-btn"
+                        onClick={() => handlePiecesStep(staff.id, 1)}
+                        title="Increase pieces (+1)"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+
+                    <div className="piece-earnings-badge">
+                      = ₹{((parseInt(displayPieces) || 0) * (staff.per_piece_rate || 0)).toLocaleString()}
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* Timestamps, Late indicator, Overtime, Notes */}
                 <div className="punch-details">

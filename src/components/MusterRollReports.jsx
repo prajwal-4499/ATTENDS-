@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function MusterRollReports() {
-  const { staffList, selectedDate, showToast } = useApp();
+  const { staffList, selectedDate, showToast, shopProfile } = useApp();
 
   // Selected Year and Month (defaults to current)
   const [currentYear, setCurrentYear] = useState(() => {
@@ -88,6 +88,7 @@ export default function MusterRollReports() {
       let totalL = 0;
       let totalLateMins = 0;
       let totalOtHours = 0;
+      let totalPieces = 0;
 
       staffAtt.forEach((a) => {
         const day = parseInt(a.date.split('-')[2]);
@@ -100,6 +101,7 @@ export default function MusterRollReports() {
 
         totalLateMins += (a.late_minutes || 0);
         totalOtHours += (parseFloat(a.overtime_hours) || 0);
+        totalPieces += (parseInt(a.pieces_produced) || 0);
       });
 
       return {
@@ -110,7 +112,8 @@ export default function MusterRollReports() {
         totalHD,
         totalL,
         totalLateMins,
-        totalOtHours: parseFloat(totalOtHours.toFixed(1))
+        totalOtHours: parseFloat(totalOtHours.toFixed(1)),
+        totalPieces
       };
     });
   }, [staffList, monthAttendanceData]);
@@ -207,7 +210,7 @@ export default function MusterRollReports() {
   // Calculate Payslip specifics for activePayslipStaff
   const payslipDetails = useMemo(() => {
     if (!activePayslipStaff) return null;
-    const { staff, totalP, totalA, totalHD, totalL, totalOtHours, totalLateMins } = activePayslipStaff;
+    const { staff, totalP, totalA, totalHD, totalL, totalOtHours, totalLateMins, totalPieces } = activePayslipStaff;
 
     const staffTxns = monthLedgerData.filter((l) => l.staff_id === staff.id);
     let advances = 0;
@@ -238,9 +241,13 @@ export default function MusterRollReports() {
       dailyEquivalent = staff.base_rate * 8;
       baseEarned = effectiveDays * dailyEquivalent;
       otRate = staff.base_rate;
+    } else if (staff.salary_type === 'PIECE_RATE') {
+      baseEarned = (totalPieces || 0) * (parseFloat(staff.per_piece_rate) || 0);
+      otRate = 0;
+      dailyEquivalent = effectiveDays > 0 ? (baseEarned / effectiveDays) : 0;
     }
 
-    const otPay = totalOtHours * otRate;
+    const otPay = staff.salary_type === 'PIECE_RATE' ? 0 : totalOtHours * otRate;
     const grossPay = Math.round(baseEarned + otPay + bonuses);
     const totalDeductions = Math.round(advances + deductions);
     const netPayable = Math.max(0, grossPay - totalDeductions);
@@ -254,6 +261,7 @@ export default function MusterRollReports() {
       totalL,
       totalLateMins,
       totalOtHours,
+      totalPieces: totalPieces || 0,
       dailyEquivalent: Math.round(dailyEquivalent),
       baseEarned: Math.round(baseEarned),
       otPay: Math.round(otPay),
@@ -425,9 +433,11 @@ export default function MusterRollReports() {
             {/* Formatted Printable Payslip Sheet */}
             <div className="payslip-sheet printable-area">
               <div className="payslip-header">
-                <h2>EKDANT SUPERMARKET</h2>
+                <h2>{shopProfile?.shop_name ? shopProfile.shop_name.toUpperCase() : 'SHOP ATTENDANCE & PAYROLL'}</h2>
                 <p style={{ fontSize: '0.85rem', color: '#475569' }}>
-                  Main Market Road • GSTIN: 27AABCE1234F1Z8 • Ph: +91 98765 00000
+                  {shopProfile?.address ? `${shopProfile.address} • ` : ''}
+                  {shopProfile?.phone_number ? `Ph: ${shopProfile.phone_number}` : ''}
+                  {shopProfile?.owner_name ? ` • Prop: ${shopProfile.owner_name}` : ''}
                 </p>
                 <div style={{
                   display: 'inline-block',
@@ -454,7 +464,11 @@ export default function MusterRollReports() {
                 <div>
                   <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Wage Category</div>
                   <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                    {payslipDetails.staff.salary_type} @ ₹{Number(payslipDetails.staff.base_rate).toLocaleString()}
+                    {payslipDetails.staff.salary_type === 'PIECE_RATE' ? (
+                      `PIECE RATE @ ₹${payslipDetails.staff.per_piece_rate}/piece`
+                    ) : (
+                      `${payslipDetails.staff.salary_type} @ ₹${Number(payslipDetails.staff.base_rate).toLocaleString()}`
+                    )}
                   </div>
                   <div style={{ fontSize: '0.82rem', color: '#475569' }}>Phone: {payslipDetails.staff.phone || 'N/A'}</div>
                 </div>
@@ -463,7 +477,7 @@ export default function MusterRollReports() {
               {/* Attendance Summary */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
+                gridTemplateColumns: payslipDetails.staff.salary_type === 'PIECE_RATE' ? 'repeat(6, 1fr)' : 'repeat(5, 1fr)',
                 gap: '0.5rem',
                 textAlign: 'center',
                 background: '#f1f5f9',
@@ -488,10 +502,23 @@ export default function MusterRollReports() {
                   <div style={{ color: '#64748b', fontSize: '0.72rem' }}>Leaves/Off</div>
                   <div style={{ fontWeight: 800, color: '#2563eb' }}>{payslipDetails.totalL}</div>
                 </div>
-                <div>
-                  <div style={{ color: '#64748b', fontSize: '0.72rem' }}>Overtime Hrs</div>
-                  <div style={{ fontWeight: 800 }}>{payslipDetails.totalOtHours}h</div>
-                </div>
+                {payslipDetails.staff.salary_type === 'PIECE_RATE' ? (
+                  <div>
+                    <div style={{ color: '#64748b', fontSize: '0.72rem' }}>Total Pieces</div>
+                    <div style={{ fontWeight: 800, color: '#6366f1' }}>{payslipDetails.totalPieces} pcs</div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ color: '#64748b', fontSize: '0.72rem' }}>Overtime Hrs</div>
+                    <div style={{ fontWeight: 800 }}>{payslipDetails.totalOtHours}h</div>
+                  </div>
+                )}
+                {payslipDetails.staff.salary_type === 'PIECE_RATE' && (
+                  <div>
+                    <div style={{ color: '#64748b', fontSize: '0.72rem' }}>Piece Rate</div>
+                    <div style={{ fontWeight: 800 }}>₹{payslipDetails.staff.per_piece_rate}/pc</div>
+                  </div>
+                )}
               </div>
 
               {/* Earnings & Deductions Table */}
@@ -506,7 +533,11 @@ export default function MusterRollReports() {
                   <tr>
                     <td>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                        <span>Basic Earned ({payslipDetails.effectiveDays} days):</span>
+                        <span>
+                          {payslipDetails.staff.salary_type === 'PIECE_RATE'
+                            ? `Piecework (${payslipDetails.totalPieces} units @ ₹${payslipDetails.staff.per_piece_rate}):`
+                            : `Basic Earned (${payslipDetails.effectiveDays} days):`}
+                        </span>
                         <strong>₹{payslipDetails.baseEarned.toLocaleString()}</strong>
                       </div>
                       {payslipDetails.otPay > 0 && (

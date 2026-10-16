@@ -8,10 +8,15 @@ import StaffManager from './components/StaffManager';
 import SalaryKhata from './components/SalaryKhata';
 import MusterRollReports from './components/MusterRollReports';
 import BackupSync from './components/BackupSync';
+import ShopRegistrationModal from './components/ShopRegistrationModal';
 import { CheckCircle2, AlertCircle, Info, Database } from 'lucide-react';
 
 function AppContent() {
-  const { isDbReady, dbError, initAppDb, activeTab, toast } = useApp();
+  const { isDbReady, dbError, initAppDb, activeTab, toast, shopProfile } = useApp();
+  const [showShopModal, setShowShopModal] = React.useState(false);
+
+  // Show registration modal on first launch if no shop profile is set
+  const needsShopRegistration = isDbReady && !shopProfile?.shop_name;
 
   if (!isDbReady) {
     return (
@@ -100,6 +105,13 @@ function AppContent() {
           </div>
         </div>
       )}
+
+      {/* One-time Shop Registration & Settings Modal */}
+      <ShopRegistrationModal
+        isOpen={needsShopRegistration || showShopModal}
+        onClose={() => setShowShopModal(false)}
+        isInitial={needsShopRegistration}
+      />
     </div>
   );
 }

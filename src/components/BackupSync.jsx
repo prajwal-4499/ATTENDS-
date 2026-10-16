@@ -1,19 +1,23 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { query, run, exportSqliteBytes } from '../db/sqliteEngine';
+import ShopRegistrationModal from './ShopRegistrationModal';
 import {
   HardDrive,
   Download,
   Upload,
   RefreshCw,
   Database,
-  CloudOff,
   CheckCircle2,
   FileCode,
   Terminal,
   ShieldCheck,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Clock,
+  Store,
+  Edit2,
+  Layers
 } from 'lucide-react';
 
 export default function BackupSync() {
@@ -24,6 +28,11 @@ export default function BackupSync() {
     downloadSqliteBackup,
     restoreSqliteBackup,
     resetToFactoryDemo,
+    shopProfile,
+    lastAutoBackupTime,
+    autoBackupHistory,
+    executeAutoBackup,
+    restoreAutoBackupSnapshot,
     showToast
   } = useApp();
 
@@ -31,12 +40,7 @@ export default function BackupSync() {
   const [sqlInput, setSqlInput] = useState('SELECT name, role, salary_type, base_rate FROM staff;');
   const [queryResult, setQueryResult] = useState(null);
   const [queryError, setQueryError] = useState('');
-
-  // Unsynced count calculation
-  const unsyncedStaff = staffList.filter((s) => s.sync_status === 0).length;
-  const unsyncedAttendance = attendanceRecords.filter((a) => a.sync_status === 0).length;
-  const unsyncedLedger = salaryLedger.filter((l) => l.sync_status === 0).length;
-  const totalUnsynced = unsyncedStaff + unsyncedAttendance + unsyncedLedger;
+  const [shopModalOpen, setShopModalOpen] = useState(false);
 
   // Execute raw SQL in console
   const handleRunSql = () => {
@@ -62,18 +66,19 @@ export default function BackupSync() {
     try {
       const data = {
         exportedAt: new Date().toISOString(),
-        shop: 'Ekdant Supermarket',
+        shop: shopProfile || { shop_name: 'Shop', phone_number: '' },
         version: '1.0.0',
         staff: staffList,
         attendance: attendanceRecords,
         salary_ledger: salaryLedger
       };
 
+      const shopSlug = (shopProfile?.shop_name || 'shop').toLowerCase().replace(/[^a-z0-9]/g, '_');
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ekdant_shop_data_snapshot_${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `${shopSlug}_data_backup_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -94,19 +99,193 @@ export default function BackupSync() {
     e.target.value = '';
   };
 
+  // Download snapshot from auto-backup history
+  const downloadSnapshot = (backupItem) => {
+    try {
+      const binaryString = atob(backupItem.data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/x-sqlite3' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `autobackup_${new Date(backupItem.timestamp).toISOString().replace(/[:.]/g, '-')}.sqlite`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      showToast('Failed to download snapshot', 'error');
+    }
+  };
+
   return (
     <div>
       <div className="attendance-header-actions">
         <div>
-          <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Local SQLite Backup & Sync Architecture</h2>
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Offline Backup & Shop Registration</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            100% offline data portability for USB drives and future cloud sync readiness.
+            Automatic 2-hour local snapshots and manual SQLite / JSON backups.
           </p>
         </div>
       </div>
 
-      {/* Backup Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
+      {/* 2-Hour Auto-Backup System Card (FEATURED) */}
+      <div className="card" style={{
+        marginBottom: '1.5rem',
+        border: '1px solid var(--border-default)',
+        background: 'var(--bg-card)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-success-subtle)',
+              color: 'var(--accent-success)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Clock size={24} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Automated 2-Hour Backups</h3>
+                <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>
+                  ✓ Running Every 2 Hours
+                </span>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0' }}>
+                Last automated snapshot: <strong>{lastAutoBackupTime ? new Date(lastAutoBackupTime).toLocaleTimeString() : 'Pending'}</strong> ({lastAutoBackupTime ? new Date(lastAutoBackupTime).toLocaleDateString() : 'Today'})
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => executeAutoBackup(true)}
+            style={{ padding: '0.6rem 1.25rem' }}
+          >
+            <RefreshCw size={16} />
+            <span>Create Auto-Backup Now</span>
+          </button>
+        </div>
+
+        {/* Snapshots Table / List */}
+        {autoBackupHistory && autoBackupHistory.length > 0 ? (
+          <div>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Recent 2-Hour Auto-Backup Snapshots (Last {autoBackupHistory.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {autoBackupHistory.map((item, idx) => (
+                <div
+                  key={item.id || idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.65rem 0.85rem',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.82rem',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <ShieldCheck size={16} color="var(--accent-success)" />
+                    <div>
+                      <span style={{ fontWeight: 700 }}>{item.dateFormatted}</span>
+                      <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.75rem' }}>
+                        ({(item.sizeBytes / 1024).toFixed(1)} KB • {item.staffCount || 0} Staff)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem' }}
+                      onClick={() => {
+                        if (window.confirm(`Restore database from snapshot taken at ${item.dateFormatted}? Current data will be replaced.`)) {
+                          restoreAutoBackupSnapshot(item);
+                        }
+                      }}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      style={{ width: '28px', height: '28px' }}
+                      onClick={() => downloadSnapshot(item)}
+                      title="Download as .sqlite file"
+                    >
+                      <Download size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+            Initial backup snapshot is taking place in the background.
+          </p>
+        )}
+      </div>
+
+      {/* Shop Profile & Registration Summary Card */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-primary-subtle)',
+              color: 'var(--accent-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Store size={22} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>
+                {shopProfile?.shop_name || 'Shop Not Registered'}
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.15rem 0 0' }}>
+                📞 {shopProfile?.phone_number || 'No phone set'}
+                {shopProfile?.owner_name ? ` • Owner: ${shopProfile.owner_name}` : ''}
+                {shopProfile?.address ? ` • ${shopProfile.address}` : ''}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setShopModalOpen(true)}
+            style={{ padding: '0.5rem 0.9rem', fontSize: '0.85rem' }}
+          >
+            <Edit2 size={15} />
+            <span>Edit Shop Profile</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Manual Export & Restore Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
         {/* Card 1: SQLite Binary */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
@@ -128,7 +307,7 @@ export default function BackupSync() {
             </div>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-            Download the entire raw SQLite database file directly to your desktop or USB flash drive. Opens in DB Browser for SQLite or any standard SQL tool.
+            Download the raw SQLite database file directly to your desktop or USB drive. Opens in DB Browser for SQLite.
           </p>
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={downloadSqliteBackup}>
             <Download size={16} />
@@ -157,7 +336,7 @@ export default function BackupSync() {
             </div>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-            Restore database on a new shop counter PC or replace records from a previous day's USB backup file.
+            Restore database on a new phone, PC, or replace records from a previous day's backup file.
           </p>
           <input
             type="file"
@@ -175,7 +354,7 @@ export default function BackupSync() {
           </button>
         </div>
 
-        {/* Card 3: JSON Snapshot & Demo Reset */}
+        {/* Card 3: JSON Snapshot */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
             <div style={{
@@ -191,190 +370,91 @@ export default function BackupSync() {
               <FileCode size={22} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Data Snapshot & Reset</h3>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>JSON export & Demo Reload</p>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>JSON Data Snapshot</h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Export data as JSON</p>
             </div>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-            Export human-readable JSON backup or reload initial supermarket demo records with one click.
+            Export human-readable JSON backup containing staff, attendance records, and salary ledger.
           </p>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-secondary" style={{ flex: 1 }} onClick={exportJsonSnapshot}>
-              <Download size={14} />
-              <span>JSON Export</span>
-            </button>
-            <button
-              className="btn btn-secondary"
-              style={{ flex: 1, borderColor: 'var(--accent-warning)', color: 'var(--accent-warning)' }}
-              onClick={() => {
-                if (window.confirm('Reset local database back to default sample records?')) {
-                  resetToFactoryDemo();
-                }
-              }}
-            >
-              <RotateCcw size={14} />
-              <span>Reset Demo</span>
-            </button>
-          </div>
+          <button className="btn btn-secondary" style={{ width: '100%' }} onClick={exportJsonSnapshot}>
+            <Download size={16} />
+            <span>Download JSON Snapshot</span>
+          </button>
         </div>
       </div>
 
-      {/* Cloud Sync Readiness Inspector (Spec Section 5) */}
+      {/* Embedded SQL Query Console */}
       <div className="card" style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <ShieldCheck size={20} color="var(--accent-success)" />
-              <span>Section 5: Forward-Compatibility & Cloud Sync Status</span>
-            </h3>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-              Change tracking columns (`sync_status`, `updated_at`, `uuid`) ready for cloud replication (Supabase / Postgres / Firebase)
-            </p>
-          </div>
-          <span style={{
-            fontSize: '0.8rem',
-            fontWeight: 700,
-            padding: '0.25rem 0.65rem',
-            borderRadius: 'var(--radius-full)',
-            background: 'var(--accent-info-subtle)',
-            color: 'var(--accent-info)'
-          }}>
-            {totalUnsynced} Records Queued for Sync
-          </span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-          <div style={{ background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Staff Master (UUIDs)</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {staffList.length} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>total</span>
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--accent-success)', marginTop: '0.2rem' }}>
-              ✓ Client UUIDs & Soft-deletes enabled
-            </div>
-          </div>
-
-          <div style={{ background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Attendance Logs</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {attendanceRecords.length} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>entries</span>
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--accent-success)', marginTop: '0.2rem' }}>
-              ✓ Shift & punch timestamps synced
-            </div>
-          </div>
-
-          <div style={{ background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Salary Khata Ledger</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {salaryLedger.length} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>transactions</span>
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--accent-success)', marginTop: '0.2rem' }}>
-              ✓ Foreign key integrity verified
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Interactive SQLite Query Console */}
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
           <Terminal size={18} color="var(--accent-primary)" />
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>SQLite Query Console</h3>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Direct SQLite SQL Terminal</h3>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Advanced Query Runner</span>
         </div>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-          Run real-time SQL statements directly against the local WebAssembly SQLite engine.
-        </p>
 
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <input
-            type="text"
+        <div style={{ marginBottom: '1rem' }}>
+          <textarea
             className="form-input"
-            style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}
+            rows="3"
+            style={{ fontFamily: 'var(--font-mono)', fontSize: '0.88rem' }}
             value={sqlInput}
             onChange={(e) => setSqlInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleRunSql()}
+            placeholder="e.g. SELECT * FROM staff;"
           />
-          <button className="btn btn-primary" onClick={handleRunSql}>
-            Execute
-          </button>
         </div>
 
-        {/* Quick query buttons */}
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-          <button
-            className="btn btn-secondary"
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-            onClick={() => setSqlInput('SELECT id, name, role, salary_type, base_rate, pin_code FROM staff;')}
-          >
-            Staff Table
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
+          <button className="btn btn-primary" onClick={handleRunSql}>
+            <span>Run SQL Statement</span>
           </button>
           <button
             className="btn btn-secondary"
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-            onClick={() => setSqlInput('SELECT date, status, count(*) as count FROM attendance GROUP BY date, status ORDER BY date DESC;')}
+            onClick={() => setSqlInput('SELECT id, name, role, salary_type, per_piece_rate FROM staff;')}
           >
-            Attendance Counts
+            Show Staff
           </button>
           <button
             className="btn btn-secondary"
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-            onClick={() => setSqlInput('SELECT type, payment_mode, SUM(amount) as total FROM salary_ledger GROUP BY type, payment_mode;')}
+            onClick={() => setSqlInput('SELECT * FROM shop_profile;')}
           >
-            Ledger Sums
-          </button>
-          <button
-            className="btn btn-secondary"
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-            onClick={() => setSqlInput('PRAGMA table_info(staff);')}
-          >
-            Schema: staff
+            Show Shop Profile
           </button>
         </div>
 
         {queryError && (
           <div style={{
-            padding: '0.65rem',
             background: 'var(--accent-danger-subtle)',
             color: 'var(--accent-danger)',
+            padding: '0.75rem',
             borderRadius: 'var(--radius-md)',
-            fontSize: '0.85rem',
             fontFamily: 'var(--font-mono)',
-            marginBottom: '1rem'
+            fontSize: '0.82rem'
           }}>
-            SQL Error: {queryError}
+            {queryError}
           </div>
         )}
 
         {queryResult && (
-          <div className="table-responsive" style={{ maxHeight: '280px', overflowY: 'auto' }}>
-            {queryResult.length === 0 ? (
-              <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                Query executed. 0 rows returned.
-              </div>
-            ) : (
-              <table className="data-table" style={{ fontSize: '0.78rem', fontFamily: 'var(--font-mono)' }}>
-                <thead>
-                  <tr>
-                    {Object.keys(queryResult[0]).map((col) => (
-                      <th key={col}>{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {queryResult.map((row, idx) => (
-                    <tr key={idx}>
-                      {Object.values(row).map((val, cIdx) => (
-                        <td key={cIdx}>{String(val ?? 'NULL')}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+          <div style={{
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            padding: '1rem',
+            maxHeight: '300px',
+            overflowY: 'auto'
+          }}>
+            <pre style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              {JSON.stringify(queryResult, null, 2)}
+            </pre>
           </div>
         )}
       </div>
+
+      {/* Edit Shop Registration Modal */}
+      <ShopRegistrationModal
+        isOpen={shopModalOpen}
+        onClose={() => setShopModalOpen(false)}
+        isInitial={false}
+      />
     </div>
   );
 }

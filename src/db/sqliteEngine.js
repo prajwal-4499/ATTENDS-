@@ -54,6 +54,17 @@ CREATE TABLE IF NOT EXISTS salary_ledger (
     sync_status INTEGER DEFAULT 0,
     FOREIGN KEY(staff_id) REFERENCES staff(id)
 );
+
+-- Shop Profile & Registration Table
+CREATE TABLE IF NOT EXISTS shop_profile (
+    id TEXT PRIMARY KEY,
+    shop_name TEXT NOT NULL,
+    phone_number TEXT NOT NULL,
+    owner_name TEXT,
+    address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 const DB_STORAGE_KEY = 'ekdant_shop_attendance_sqlite_bytes_v1';
