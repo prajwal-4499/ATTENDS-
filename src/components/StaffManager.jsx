@@ -11,7 +11,11 @@ import {
   KeyRound,
   ShieldAlert,
   Search,
-  DollarSign
+  DollarSign,
+  Package,
+  ToggleLeft,
+  ToggleRight,
+  Timer
 } from 'lucide-react';
 
 export default function StaffManager() {
@@ -35,7 +39,8 @@ export default function StaffManager() {
     work_end_time: '20:00',
     pin_code: '1234',
     photo_path: '',
-    is_active: 1
+    is_active: 1,
+    is_timer_enabled: 1
   });
 
   const handleOpenAdd = () => {
@@ -51,7 +56,8 @@ export default function StaffManager() {
       work_end_time: '20:00',
       pin_code: String(Math.floor(1000 + Math.random() * 9000)),
       photo_path: '',
-      is_active: 1
+      is_active: 1,
+      is_timer_enabled: 1
     });
     setEditingStaff(null);
     setIsModalOpen(true);
@@ -70,7 +76,8 @@ export default function StaffManager() {
       work_end_time: staff.work_end_time || '20:00',
       pin_code: staff.pin_code || '1234',
       photo_path: staff.photo_path || '',
-      is_active: staff.is_active ?? 1
+      is_active: staff.is_active ?? 1,
+      is_timer_enabled: staff.is_timer_enabled !== 0 ? 1 : 0
     });
     setEditingStaff(staff);
     setIsModalOpen(true);
@@ -196,9 +203,18 @@ export default function StaffManager() {
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                      <Clock size={13} color="var(--accent-primary)" />
-                      <span>{staff.work_start_time} - {staff.work_end_time}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                        <Clock size={13} color="var(--accent-primary)" />
+                        <span>{staff.work_start_time} - {staff.work_end_time}</span>
+                      </div>
+                      <span style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 600,
+                        color: staff.is_timer_enabled !== 0 ? 'var(--accent-success)' : 'var(--text-muted)'
+                      }}>
+                        {staff.is_timer_enabled !== 0 ? '⏱️ Shift Timer Active' : '🔓 Flexible Hours'}
+                      </span>
                     </div>
                   </td>
                   <td>
@@ -427,6 +443,65 @@ export default function StaffManager() {
                 </div>
               )}
 
+              {/* Shift Timer & Late Tracking Switch for this staff */}
+              <div style={{
+                background: 'var(--bg-secondary)',
+                border: formData.is_timer_enabled ? '1.5px solid var(--accent-primary-subtle)' : '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.85rem 1rem',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: 'var(--radius-md)',
+                    background: formData.is_timer_enabled ? 'var(--accent-primary-subtle)' : 'var(--bg-elevated)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: formData.is_timer_enabled ? 'var(--accent-primary)' : 'var(--text-muted)'
+                  }}>
+                    <Timer size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      Shift Timer & Late Penalty Tracking
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {formData.is_timer_enabled
+                        ? 'Active: Punches count late minutes against shift start'
+                        : 'Disabled: Flexible hours without late penalties'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, is_timer_enabled: formData.is_timer_enabled ? 0 : 1 })}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0.2rem',
+                    color: formData.is_timer_enabled ? 'var(--accent-primary)' : 'var(--text-muted)'
+                  }}
+                  aria-label="Toggle Staff Shift Timer"
+                >
+                  {formData.is_timer_enabled ? (
+                    <ToggleRight size={34} color="var(--accent-primary)" />
+                  ) : (
+                    <ToggleLeft size={34} color="var(--text-muted)" />
+                  )}
+                </button>
+              </div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Shift Start Time (Auto Late calculation)</label>
@@ -474,7 +549,20 @@ export default function StaffManager() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              {/* Sticky action footer - NEVER hidden by lower navigation */}
+              <div className="modal-footer-sticky" style={{
+                position: 'sticky',
+                bottom: 0,
+                background: 'var(--bg-card)',
+                paddingTop: '0.85rem',
+                paddingBottom: '0.25rem',
+                marginTop: '1rem',
+                borderTop: '1px solid var(--border-subtle)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '0.75rem',
+                zIndex: 30
+              }}>
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -482,8 +570,8 @@ export default function StaffManager() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingStaff ? 'Save Changes' : 'Add Staff Member'}
+                <button type="submit" className="btn btn-primary" style={{ minWidth: '150px', fontWeight: 700 }}>
+                  {editingStaff ? 'Save Profile' : 'Add Staff Member'}
                 </button>
               </div>
             </form>

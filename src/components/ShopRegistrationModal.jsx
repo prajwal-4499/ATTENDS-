@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Store, Phone, User, MapPin, CheckCircle2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Store, Phone, User, MapPin, CheckCircle2, ShieldCheck, Sparkles, X, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
 
 export default function ShopRegistrationModal({ isOpen, onClose, isInitial = false }) {
   const { shopProfile, saveShopProfile } = useApp();
@@ -9,6 +9,7 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
   const [phoneNumber, setPhoneNumber] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [address, setAddress] = useState('');
+  const [timerTrackingEnabled, setTimerTrackingEnabled] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -17,6 +18,7 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
       setPhoneNumber(shopProfile.phone_number || '');
       setOwnerName(shopProfile.owner_name || '');
       setAddress(shopProfile.address || '');
+      setTimerTrackingEnabled(shopProfile.timer_tracking_enabled !== 0);
     }
   }, [shopProfile, isOpen]);
 
@@ -39,7 +41,8 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
       shop_name: shopName.trim(),
       phone_number: phoneNumber.trim(),
       owner_name: ownerName.trim(),
-      address: address.trim()
+      address: address.trim(),
+      timer_tracking_enabled: timerTrackingEnabled ? 1 : 0
     });
 
     if (success && onClose) {
@@ -48,7 +51,7 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
   };
 
   return (
-    <div className="modal-overlay" style={{ zIndex: 9999 }}>
+    <div className="modal-overlay" style={{ zIndex: 99999 }}>
       <div
         className="modal-content shop-register-modal"
         style={{
@@ -169,6 +172,65 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
             </div>
           </div>
 
+          {/* Staff Shift Timer & Late Penalty Toggle */}
+          <div style={{
+            background: 'var(--bg-secondary)',
+            border: timerTrackingEnabled ? '1.5px solid var(--accent-primary-subtle)' : '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.85rem 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.75rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: 'var(--radius-md)',
+                background: timerTrackingEnabled ? 'var(--accent-primary-subtle)' : 'var(--bg-elevated)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: timerTrackingEnabled ? 'var(--accent-primary)' : 'var(--text-muted)'
+              }}>
+                <Clock size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Staff Shift Timers & Late Arrival
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {timerTrackingEnabled
+                    ? 'Active: Punches count late minutes & overtime'
+                    : 'Disabled: Flexible hours without late penalties'}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setTimerTrackingEnabled(!timerTrackingEnabled)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0.2rem',
+                color: timerTrackingEnabled ? 'var(--accent-primary)' : 'var(--text-muted)',
+                transition: 'transform var(--transition-fast)'
+              }}
+              aria-label="Toggle Staff Shift Timers"
+            >
+              {timerTrackingEnabled ? (
+                <ToggleRight size={34} color="var(--accent-primary)" />
+              ) : (
+                <ToggleLeft size={34} color="var(--text-muted)" />
+              )}
+            </button>
+          </div>
+
           <div style={{
             background: 'var(--bg-secondary)',
             border: '1px solid var(--border-subtle)',
@@ -186,21 +248,32 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
             </span>
           </div>
 
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={{
-              padding: '0.85rem 1.25rem',
-              fontSize: '1rem',
-              fontWeight: 700,
-              width: '100%',
-              marginTop: '0.5rem',
-              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)'
-            }}
-          >
-            <CheckCircle2 size={18} />
-            <span>{isInitial ? 'Save & Start Register' : 'Save Changes'}</span>
-          </button>
+          {/* Sticky action footer - NEVER hidden by lower navigation */}
+          <div className="modal-footer-sticky" style={{
+            position: 'sticky',
+            bottom: 0,
+            background: 'var(--bg-card)',
+            paddingTop: '0.85rem',
+            paddingBottom: '0.25rem',
+            marginTop: '0.75rem',
+            borderTop: '1px solid var(--border-subtle)',
+            zIndex: 30
+          }}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{
+                padding: '0.85rem 1.25rem',
+                fontSize: '1rem',
+                fontWeight: 700,
+                width: '100%',
+                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)'
+              }}
+            >
+              <CheckCircle2 size={18} />
+              <span>{isInitial ? 'Save & Start Register' : 'Save Changes'}</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>

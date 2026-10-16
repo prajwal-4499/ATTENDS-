@@ -17,7 +17,10 @@ import {
   Clock,
   Store,
   Edit2,
-  Layers
+  Layers,
+  Timer,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 
 export default function BackupSync() {
@@ -29,6 +32,7 @@ export default function BackupSync() {
     restoreSqliteBackup,
     resetToFactoryDemo,
     shopProfile,
+    toggleGlobalTimerTracking,
     lastAutoBackupTime,
     autoBackupHistory,
     executeAutoBackup,
@@ -280,6 +284,73 @@ export default function BackupSync() {
           >
             <Edit2 size={15} />
             <span>Edit Shop Profile</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Staff Shift Timers & Late Arrival Policy Card */}
+      <div className="card" style={{
+        marginBottom: '1.5rem',
+        border: '1px solid var(--border-default)',
+        background: 'var(--bg-card)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: 'var(--radius-md)',
+              background: (shopProfile?.timer_tracking_enabled !== 0) ? 'var(--accent-primary-subtle)' : 'var(--bg-elevated)',
+              color: (shopProfile?.timer_tracking_enabled !== 0) ? 'var(--accent-primary)' : 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Timer size={22} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+                  Staff Shift Timers &amp; Late Tracking
+                </h3>
+                <span
+                  className={shopProfile?.timer_tracking_enabled !== 0 ? 'badge badge-success' : 'badge badge-warning'}
+                  style={{ fontSize: '0.72rem' }}
+                >
+                  {shopProfile?.timer_tracking_enabled !== 0 ? '✓ Timers Enabled' : '○ Timers Disabled'}
+                </span>
+              </div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0' }}>
+                {shopProfile?.timer_tracking_enabled !== 0
+                  ? 'Active: Punching in after work start time automatically calculates and logs late minutes.'
+                  : 'Disabled: Staff can punch in anytime without late arrival calculation (flexible work hours).'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleGlobalTimerTracking}
+            className={shopProfile?.timer_tracking_enabled !== 0 ? 'btn btn-secondary' : 'btn btn-primary'}
+            style={{
+              padding: '0.55rem 1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontWeight: 700
+            }}
+          >
+            {shopProfile?.timer_tracking_enabled !== 0 ? (
+              <>
+                <ToggleRight size={20} color="var(--accent-success)" />
+                <span>Disable Timers</span>
+              </>
+            ) : (
+              <>
+                <ToggleLeft size={20} />
+                <span>Enable Timers</span>
+              </>
+            )}
           </button>
         </div>
       </div>

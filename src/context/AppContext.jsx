@@ -13,9 +13,9 @@ import { seedDatabaseIfEmpty, INITIAL_STAFF } from '../db/seedData';
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  // Theme state: dark / light
+  // Theme state: light / dark (Light is primary default)
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('ekdant_theme') || 'dark';
+    return localStorage.getItem('ekdant_theme') || 'light';
   });
 
   const [isDbReady, setIsDbReady] = useState(false);
@@ -142,16 +142,19 @@ export function AppProvider({ children }) {
         let punchIn = rec.punch_in;
         let punchOut = rec.punch_out;
         let lateMinutes = rec.late_minutes;
+        const staffObj = staffList.find(s => s.id === staffId);
+        const isTimerOn = (shopProfile?.timer_tracking_enabled !== 0) && (staffObj?.is_timer_enabled !== 0);
 
         if (status === 'PRESENT' && !punchIn) {
           punchIn = timeStr;
-          // Calculate late minutes if staff has work_start_time
-          const staffObj = staffList.find(s => s.id === staffId);
-          if (staffObj && staffObj.work_start_time) {
+          // Calculate late minutes if staff has work_start_time and timer tracking is enabled
+          if (isTimerOn && staffObj && staffObj.work_start_time) {
             const [sH, sM] = staffObj.work_start_time.split(':').map(Number);
             const inTotalMins = (now.getHours() * 60) + now.getMinutes();
             const startTotalMins = (sH * 60) + sM;
             lateMinutes = Math.max(0, inTotalMins - startTotalMins);
+          } else {
+            lateMinutes = 0;
           }
         } else if (status === 'ABSENT' || status === 'LEAVE') {
           punchIn = null;
@@ -171,16 +174,19 @@ export function AppProvider({ children }) {
       } else {
         // Insert new record
         const staffObj = staffList.find(s => s.id === staffId);
+        const isTimerOn = (shopProfile?.timer_tracking_enabled !== 0) && (staffObj?.is_timer_enabled !== 0);
         let punchIn = null;
         let lateMinutes = 0;
 
         if (status === 'PRESENT' || status === 'HALF_DAY') {
           punchIn = timeStr;
-          if (staffObj && staffObj.work_start_time) {
+          if (isTimerOn && staffObj && staffObj.work_start_time) {
             const [sH, sM] = staffObj.work_start_time.split(':').map(Number);
             const inTotalMins = (now.getHours() * 60) + now.getMinutes();
             const startTotalMins = (sH * 60) + sM;
             lateMinutes = Math.max(0, inTotalMins - startTotalMins);
+          } else {
+            lateMinutes = 0;
           }
         }
 
@@ -196,7 +202,7 @@ export function AppProvider({ children }) {
       console.error(err);
       showToast('Error saving attendance: ' + err.message, 'error');
     }
-  }, [selectedDate, staffList, reloadFromDb, showToast]);
+  }, [selectedDate, staffList, shopProfile, reloadFromDb, showToast]);
 
   // Update pieces produced count for today
   const updatePiecesProduced = useCallback((staffId, pieces) => {
@@ -265,9 +271,10 @@ export function AppProvider({ children }) {
       const now = new Date();
       const punchTime = `${todayStr}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
-      // Calculate late minutes
+      // Calculate late minutes if timer is enabled
+      const isTimerOn = (shopProfile?.timer_tracking_enabled !== 0) && (staff.is_timer_enabled !== 0);
       let lateMins = 0;
-      if (staff.work_start_time) {
+      if (isTimerOn && staff.work_start_time) {
         const [sH, sM] = staff.work_start_time.split(':').map(Number);
         const inMins = (now.getHours() * 60) + now.getMinutes();
         const startMins = (sH * 60) + sM;
@@ -305,7 +312,7 @@ export function AppProvider({ children }) {
       console.error('Kiosk punch in error:', err);
       return { success: false, message: err.message };
     }
-  }, [staffList, reloadFromDb]);
+  }, [staffList, shopProfile, reloadFromDb]);
 
   // Kiosk Punch Out with auto overtime calculation
   const kioskPunchOut = useCallback((staffId, pinEntered) => {
@@ -361,32 +368,35 @@ export function AppProvider({ children }) {
   // Add / Edit Staff
   const saveStaff = useCallback((staffData) => {
     try {
+      const isTimerEnabled = staffData.is_timer_enabled !== undefined ? (staffData.is_timer_enabled ? 1 : 0) : 1;
       if (staffData.id) {
         // Update
         run(`
           UPDATE staff
           SET name = ?, phone = ?, role = ?, salary_type = ?, base_rate = ?, per_piece_rate = ?,
               work_start_time = ?, work_end_time = ?, pin_code = ?, photo_path = ?,
-              is_active = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 0
+              is_active = ?, is_timer_enabled = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 0
           WHERE id = ?
         `, [
           staffData.name, staffData.phone, staffData.role, staffData.salary_type,
           staffData.base_rate, staffData.per_piece_rate || 0, staffData.work_start_time, staffData.work_end_time,
-          staffData.pin_code, staffData.photo_path, staffData.is_active ?? 1, staffData.id
+          staffData.pin_code, staffData.photo_path, staffData.is_active ?? 1,
+          isTimerEnabled, staffData.id
         ]);
         showToast('Staff member updated successfully');
       } else {
         // Insert
         const newId = generateUUID();
         run(`
-          INSERT INTO staff (id, name, phone, role, salary_type, base_rate, per_piece_rate, work_start_time, work_end_time, pin_code, photo_path, is_active, sync_status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
+          INSERT INTO staff (id, name, phone, role, salary_type, base_rate, per_piece_rate, work_start_time, work_end_time, pin_code, photo_path, is_active, is_timer_enabled, sync_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0)
         `, [
           newId, staffData.name, staffData.phone, staffData.role || 'Staff',
           staffData.salary_type || 'MONTHLY', staffData.base_rate || 0,
           staffData.per_piece_rate || 0,
           staffData.work_start_time || '09:00', staffData.work_end_time || '20:00',
           staffData.pin_code || '1234', staffData.photo_path || '',
+          isTimerEnabled
         ]);
         showToast('New staff member added');
       }
@@ -521,6 +531,7 @@ export function AppProvider({ children }) {
       const phoneNo = profileData.phone_number?.trim() || '';
       const ownerName = profileData.owner_name?.trim() || '';
       const address = profileData.address?.trim() || '';
+      const timerTracking = profileData.timer_tracking_enabled !== undefined ? (profileData.timer_tracking_enabled ? 1 : 0) : 1;
 
       if (!shopName || !phoneNo) {
         showToast('Shop Name and Phone Number are required', 'error');
@@ -529,17 +540,17 @@ export function AppProvider({ children }) {
 
       if (existing.length > 0) {
         run(
-          "UPDATE shop_profile SET shop_name = ?, phone_number = ?, owner_name = ?, address = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-          [shopName, phoneNo, ownerName, address, id]
+          "UPDATE shop_profile SET shop_name = ?, phone_number = ?, owner_name = ?, address = ?, timer_tracking_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+          [shopName, phoneNo, ownerName, address, timerTracking, id]
         );
       } else {
         run(
-          "INSERT INTO shop_profile (id, shop_name, phone_number, owner_name, address) VALUES (?, ?, ?, ?, ?)",
-          [id, shopName, phoneNo, ownerName, address]
+          "INSERT INTO shop_profile (id, shop_name, phone_number, owner_name, address, timer_tracking_enabled) VALUES (?, ?, ?, ?, ?, ?)",
+          [id, shopName, phoneNo, ownerName, address, timerTracking]
         );
       }
 
-      const updated = { id, shop_name: shopName, phone_number: phoneNo, owner_name: ownerName, address };
+      const updated = { id, shop_name: shopName, phone_number: phoneNo, owner_name: ownerName, address, timer_tracking_enabled: timerTracking };
       setShopProfile(updated);
       localStorage.setItem('ekdant_shop_profile', JSON.stringify(updated));
       showToast('Shop details registered & saved successfully!');
@@ -549,6 +560,26 @@ export function AppProvider({ children }) {
       return false;
     }
   }, [showToast]);
+
+  // Toggle global staff shift timer tracking
+  const toggleGlobalTimerTracking = useCallback(() => {
+    try {
+      const current = (shopProfile?.timer_tracking_enabled !== 0) ? 1 : 0;
+      const nextVal = current === 1 ? 0 : 1;
+      const existing = query("SELECT * FROM shop_profile LIMIT 1");
+      if (existing.length > 0) {
+        run("UPDATE shop_profile SET timer_tracking_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [nextVal, existing[0].id]);
+      } else {
+        run("INSERT INTO shop_profile (id, shop_name, phone_number, timer_tracking_enabled) VALUES (?, 'My Shop', '0000000000', ?)", [generateUUID(), nextVal]);
+      }
+      const updated = { ...(shopProfile || {}), timer_tracking_enabled: nextVal };
+      setShopProfile(updated);
+      localStorage.setItem('ekdant_shop_profile', JSON.stringify(updated));
+      showToast(nextVal ? 'Staff shift timers & late tracking enabled' : 'Staff shift timers & late tracking disabled');
+    } catch (err) {
+      showToast('Failed to toggle timer setting: ' + err.message, 'error');
+    }
+  }, [shopProfile, showToast]);
 
   // Execute Auto Backup (saves snapshot every 2 hours)
   const executeAutoBackup = useCallback((isManual = false) => {
@@ -651,6 +682,7 @@ export function AppProvider({ children }) {
         salaryLedger,
         shopProfile,
         saveShopProfile,
+        toggleGlobalTimerTracking,
         lastAutoBackupTime,
         autoBackupHistory,
         executeAutoBackup,

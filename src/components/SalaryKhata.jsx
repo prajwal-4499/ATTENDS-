@@ -528,7 +528,7 @@ export default function SalaryKhata() {
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+              <div className="modal-footer-sticky">
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -536,7 +536,7 @@ export default function SalaryKhata() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary" style={{ fontWeight: 700 }}>
                   Confirm Transaction
                 </button>
               </div>

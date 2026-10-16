@@ -23,7 +23,8 @@ export default function AttendanceGrid() {
     selectedDate,
     markAttendance,
     markAllPresent,
-    updatePiecesProduced
+    updatePiecesProduced,
+    shopProfile
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -382,7 +383,7 @@ export default function AttendanceGrid() {
                     </div>
                   ) : null}
 
-                  {record?.late_minutes > 0 ? (
+                  {(record?.late_minutes > 0 && (shopProfile?.timer_tracking_enabled !== 0) && (staff.is_timer_enabled !== 0)) ? (
                     <span className="late-tag">+{record.late_minutes}m Late</span>
                   ) : null}
 
@@ -438,7 +439,7 @@ export default function AttendanceGrid() {
               ></textarea>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+            <div className="modal-footer-sticky">
               <button className="btn btn-secondary" onClick={() => setEditingNoteStaff(null)}>
                 Cancel
               </button>

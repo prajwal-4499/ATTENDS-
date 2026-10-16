@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS staff (
     per_piece_rate REAL DEFAULT 0,      -- Rate per piece for PIECE_RATE workers
     work_start_time TEXT DEFAULT '09:00',
     work_end_time TEXT DEFAULT '20:00',
+    is_timer_enabled INTEGER DEFAULT 1,  -- 1 = shift timer & late arrival enabled, 0 = disabled (flexible hours)
     pin_code TEXT,
     photo_path TEXT,
     is_active INTEGER DEFAULT 1,
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS shop_profile (
     phone_number TEXT NOT NULL,
     owner_name TEXT,
     address TEXT,
+    timer_tracking_enabled INTEGER DEFAULT 1, -- 1 = staff shift timer & late penalty tracking enabled, 0 = disabled
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -194,6 +196,15 @@ export async function initDatabase() {
     const staffCols = queryToObjects(dbInstance.exec("PRAGMA table_info(staff)"));
     if (!staffCols.some(c => c.name === 'per_piece_rate')) {
       dbInstance.run("ALTER TABLE staff ADD COLUMN per_piece_rate REAL DEFAULT 0");
+    }
+    // Migration: is_timer_enabled in staff
+    if (!staffCols.some(c => c.name === 'is_timer_enabled')) {
+      dbInstance.run("ALTER TABLE staff ADD COLUMN is_timer_enabled INTEGER DEFAULT 1");
+    }
+    // Migration: timer_tracking_enabled in shop_profile
+    const shopCols = queryToObjects(dbInstance.exec("PRAGMA table_info(shop_profile)"));
+    if (!shopCols.some(c => c.name === 'timer_tracking_enabled')) {
+      dbInstance.run("ALTER TABLE shop_profile ADD COLUMN timer_tracking_enabled INTEGER DEFAULT 1");
     }
     persistDatabase();
   } catch (e) {
