@@ -9,6 +9,18 @@ import {
   clearDatabase
 } from '../db/sqliteEngine';
 import { seedDatabaseIfEmpty, INITIAL_STAFF } from '../db/seedData';
+import {
+  initFirebaseService,
+  isCloudSyncReady,
+  pushRecordToCloud,
+  startRealtimeListeners,
+  stopRealtimeListeners,
+  executeFullCloudSync,
+  saveCloudSyncSettings,
+  getStoredShopCode,
+  getStoredDeviceRole,
+  getStoredFirebaseConfig
+} from '../services/firebaseSync';
 
 const AppContext = createContext(null);
 
@@ -60,6 +72,15 @@ export function AppProvider({ children }) {
     } catch (e) {
       return [];
     }
+  });
+
+  // Live Multi-Device Cloud Sync States (Firebase Firestore)
+  const [cloudShopCode, setCloudShopCode] = useState(getStoredShopCode);
+  const [deviceRole, setDeviceRole] = useState(getStoredDeviceRole);
+  const [isCloudReady, setIsCloudReady] = useState(isCloudSyncReady);
+  const [lastCloudSyncTime, setLastCloudSyncTime] = useState(() => {
+    const ts = localStorage.getItem('attends_last_cloud_sync_ts');
+    return ts ? parseInt(ts, 10) : null;
   });
 
   // Apply theme to document
@@ -198,6 +219,12 @@ export function AppProvider({ children }) {
 
       reloadFromDb();
       showToast(`Marked ${status} for staff`, 'success');
+
+      // Async cloud sync
+      try {
+        const savedAtt = query("SELECT * FROM attendance WHERE staff_id = ? AND date = ?", [staffId, selectedDate]);
+        if (savedAtt.length > 0) pushRecordToCloud('attendance', savedAtt[0]);
+      } catch (e) {}
     } catch (err) {
       console.error(err);
       showToast('Error saving attendance: ' + err.message, 'error');
@@ -219,6 +246,12 @@ export function AppProvider({ children }) {
         `, [generateUUID(), staffId, selectedDate, parseInt(pieces) || 0]);
       }
       reloadFromDb();
+
+      // Async cloud sync
+      try {
+        const savedAtt = query("SELECT * FROM attendance WHERE staff_id = ? AND date = ?", [staffId, selectedDate]);
+        if (savedAtt.length > 0) pushRecordToCloud('attendance', savedAtt[0]);
+      } catch (e) {}
     } catch (err) {
       console.error(err);
       showToast('Error updating pieces: ' + err.message, 'error');
@@ -401,6 +434,11 @@ export function AppProvider({ children }) {
         showToast('New staff member added');
       }
       reloadFromDb();
+      try {
+        const targetId = staffData.id || newId;
+        const savedStaff = query("SELECT * FROM staff WHERE id = ?", [targetId]);
+        if (savedStaff.length > 0) pushRecordToCloud('staff', savedStaff[0]);
+      } catch (e) {}
       return true;
     } catch (err) {
       console.error(err);
@@ -416,6 +454,10 @@ export function AppProvider({ children }) {
       run("UPDATE staff SET is_active = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 0 WHERE id = ?", [newStatus, staffId]);
       reloadFromDb();
       showToast(`Staff marked as ${newStatus ? 'Active' : 'Inactive'}`);
+      try {
+        const savedStaff = query("SELECT * FROM staff WHERE id = ?", [staffId]);
+        if (savedStaff.length > 0) pushRecordToCloud('staff', savedStaff[0]);
+      } catch (e) {}
     } catch (err) {
       console.error(err);
       showToast('Failed to update staff status', 'error');
@@ -442,11 +484,12 @@ export function AppProvider({ children }) {
   // Salary Ledger: Add Advance / Bonus / Deduction / Payout
   const addLedgerTransaction = useCallback((data) => {
     try {
+      const transId = generateUUID();
       run(`
         INSERT INTO salary_ledger (id, staff_id, transaction_date, type, amount, payment_mode, remarks, sync_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0)
       `, [
-        generateUUID(),
+        transId,
         data.staff_id,
         data.transaction_date || getTodayStr(),
         data.type,
@@ -456,6 +499,17 @@ export function AppProvider({ children }) {
       ]);
       reloadFromDb();
       showToast(`${data.type} of ₹${data.amount} recorded!`);
+      try {
+        pushRecordToCloud('salary_ledger', {
+          id: transId,
+          staff_id: data.staff_id,
+          transaction_date: data.transaction_date || getTodayStr(),
+          type: data.type,
+          amount: parseFloat(data.amount),
+          payment_mode: data.payment_mode || 'CASH',
+          remarks: data.remarks || ''
+        });
+      } catch (e) {}
       return true;
     } catch (err) {
       console.error(err);
@@ -554,6 +608,9 @@ export function AppProvider({ children }) {
       setShopProfile(updated);
       localStorage.setItem('ekdant_shop_profile', JSON.stringify(updated));
       showToast('Shop details registered & saved successfully!');
+      try {
+        pushRecordToCloud('shop_profile', updated);
+      } catch (e) {}
       return true;
     } catch (err) {
       showToast('Failed to save shop details: ' + err.message, 'error');
@@ -665,6 +722,205 @@ export function AppProvider({ children }) {
     }
   }, [reloadFromDb, showToast]);
 
+  // Handle incoming real-time records from cloud (Other Devices)
+  const handleCloudIncomingUpdate = useCallback(({ table, records }) => {
+    if (!records || records.length === 0) return;
+    try {
+      if (table === 'attendance') {
+        records.forEach(rec => {
+          if (!rec.id || !rec.staff_id || !rec.date) return;
+          const exists = query("SELECT id FROM attendance WHERE id = ?", [rec.id]);
+          if (exists.length > 0) {
+            run(`
+              UPDATE attendance
+              SET staff_id = ?, date = ?, punch_in = ?, punch_out = ?, status = ?,
+                  late_minutes = ?, overtime_hours = ?, punch_method = ?, pieces_produced = ?,
+                  notes = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 1
+              WHERE id = ?
+            `, [
+              rec.staff_id, rec.date, rec.punch_in || null, rec.punch_out || null,
+              rec.status || 'PRESENT', rec.late_minutes || 0, rec.overtime_hours || 0,
+              rec.punch_method || 'CLOUD', rec.pieces_produced || 0, rec.notes || '', rec.id
+            ]);
+          } else {
+            run(`
+              INSERT INTO attendance (id, staff_id, date, punch_in, punch_out, status, late_minutes, overtime_hours, punch_method, pieces_produced, notes, sync_status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `, [
+              rec.id, rec.staff_id, rec.date, rec.punch_in || null, rec.punch_out || null,
+              rec.status || 'PRESENT', rec.late_minutes || 0, rec.overtime_hours || 0,
+              rec.punch_method || 'CLOUD', rec.pieces_produced || 0, rec.notes || ''
+            ]);
+          }
+        });
+      } else if (table === 'staff') {
+        records.forEach(s => {
+          if (!s.id || !s.name) return;
+          const exists = query("SELECT id FROM staff WHERE id = ?", [s.id]);
+          if (exists.length > 0) {
+            run(`
+              UPDATE staff
+              SET name = ?, phone = ?, role = ?, salary_type = ?, base_rate = ?, per_piece_rate = ?,
+                  work_start_time = ?, work_end_time = ?, pin_code = ?, photo_path = ?,
+                  is_active = ?, is_timer_enabled = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 1
+              WHERE id = ?
+            `, [
+              s.name, s.phone || '', s.role || 'Staff', s.salary_type || 'MONTHLY',
+              s.base_rate || 0, s.per_piece_rate || 0, s.work_start_time || '09:00',
+              s.work_end_time || '20:00', s.pin_code || '1234', s.photo_path || '',
+              s.is_active ?? 1, s.is_timer_enabled ?? 1, s.id
+            ]);
+          } else {
+            run(`
+              INSERT INTO staff (id, name, phone, role, salary_type, base_rate, per_piece_rate, work_start_time, work_end_time, pin_code, photo_path, is_active, is_timer_enabled, sync_status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `, [
+              s.id, s.name, s.phone || '', s.role || 'Staff', s.salary_type || 'MONTHLY',
+              s.base_rate || 0, s.per_piece_rate || 0, s.work_start_time || '09:00',
+              s.work_end_time || '20:00', s.pin_code || '1234', s.photo_path || '',
+              s.is_active ?? 1, s.is_timer_enabled ?? 1
+            ]);
+          }
+        });
+      } else if (table === 'salary_ledger') {
+        records.forEach(l => {
+          if (!l.id || !l.staff_id) return;
+          const exists = query("SELECT id FROM salary_ledger WHERE id = ?", [l.id]);
+          if (exists.length > 0) {
+            run(`
+              UPDATE salary_ledger
+              SET staff_id = ?, transaction_date = ?, type = ?, amount = ?, payment_mode = ?, remarks = ?, sync_status = 1
+              WHERE id = ?
+            `, [
+              l.staff_id, l.transaction_date || getTodayStr(), l.type || 'ADVANCE',
+              parseFloat(l.amount) || 0, l.payment_mode || 'CASH', l.remarks || '', l.id
+            ]);
+          } else {
+            run(`
+              INSERT INTO salary_ledger (id, staff_id, transaction_date, type, amount, payment_mode, remarks, sync_status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            `, [
+              l.id, l.staff_id, l.transaction_date || getTodayStr(), l.type || 'ADVANCE',
+              parseFloat(l.amount) || 0, l.payment_mode || 'CASH', l.remarks || ''
+            ]);
+          }
+        });
+      } else if (table === 'shop_profile') {
+        records.forEach(p => {
+          if (!p.id || !p.shop_name) return;
+          const exists = query("SELECT id FROM shop_profile WHERE id = ?", [p.id]);
+          if (exists.length > 0) {
+            run(`
+              UPDATE shop_profile
+              SET shop_name = ?, phone_number = ?, owner_name = ?, address = ?, timer_tracking_enabled = ?, updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?
+            `, [
+              p.shop_name, p.phone_number || '', p.owner_name || '', p.address || '',
+              p.timer_tracking_enabled ?? 1, p.id
+            ]);
+          } else {
+            run(`
+              INSERT INTO shop_profile (id, shop_name, phone_number, owner_name, address, timer_tracking_enabled)
+              VALUES (?, ?, ?, ?, ?, ?)
+            `, [
+              p.id, p.shop_name, p.phone_number || '', p.owner_name || '', p.address || '',
+              p.timer_tracking_enabled ?? 1
+            ]);
+          }
+        });
+      }
+
+      reloadFromDb();
+      setLastCloudSyncTime(Date.now());
+    } catch (e) {
+      console.warn('Error merging cloud data into SQLite:', e);
+    }
+  }, [reloadFromDb, getTodayStr]);
+
+  // Two-way manual sync now
+  const syncCloudNow = useCallback(async () => {
+    if (!isCloudSyncReady()) {
+      showToast('Please configure Firebase and Shop Code in Settings first', 'error');
+      return false;
+    }
+
+    try {
+      showToast('Syncing with cloud...', 'info');
+      const localStaff = query("SELECT * FROM staff");
+      const localAtt = query("SELECT * FROM attendance");
+      const localLedger = query("SELECT * FROM salary_ledger");
+      const localProfile = query("SELECT * FROM shop_profile LIMIT 1")[0] || null;
+
+      const result = await executeFullCloudSync({
+        staff: localStaff,
+        attendance: localAtt,
+        salaryLedger: localLedger,
+        shopProfile: localProfile
+      });
+
+      if (result.success) {
+        if (result.cloudData.staff) {
+          handleCloudIncomingUpdate({ table: 'staff', records: result.cloudData.staff });
+        }
+        if (result.cloudData.attendance) {
+          handleCloudIncomingUpdate({ table: 'attendance', records: result.cloudData.attendance });
+        }
+        if (result.cloudData.salaryLedger) {
+          handleCloudIncomingUpdate({ table: 'salary_ledger', records: result.cloudData.salaryLedger });
+        }
+        if (result.cloudData.shopProfile) {
+          handleCloudIncomingUpdate({ table: 'shop_profile', records: [result.cloudData.shopProfile] });
+        }
+
+        setLastCloudSyncTime(result.timestamp);
+        setIsCloudReady(true);
+        showToast('✓ Real-time sync complete between devices!');
+        return true;
+      } else {
+        showToast('Sync failed: ' + result.message, 'error');
+        return false;
+      }
+    } catch (err) {
+      showToast('Cloud sync error: ' + err.message, 'error');
+      return false;
+    }
+  }, [handleCloudIncomingUpdate, showToast]);
+
+  // Update cloud sync configuration
+  const updateCloudSyncSettings = useCallback(async ({ config, shopCode, role }) => {
+    try {
+      const initResult = saveCloudSyncSettings({ config, shopCode, role });
+      setCloudShopCode(shopCode?.toUpperCase() || '');
+      setDeviceRole(role || 'owner');
+      setIsCloudReady(initResult.initialized);
+
+      if (initResult.initialized) {
+        startRealtimeListeners(handleCloudIncomingUpdate);
+        showToast('✓ Cloud sync connected! Syncing devices...', 'success');
+        await syncCloudNow();
+      } else {
+        showToast('Cloud sync settings saved');
+      }
+      return true;
+    } catch (err) {
+      showToast('Failed to save cloud sync settings: ' + err.message, 'error');
+      return false;
+    }
+  }, [handleCloudIncomingUpdate, syncCloudNow, showToast]);
+
+  // Auto-start listeners on mount
+  useEffect(() => {
+    if (!isDbReady) return;
+    initFirebaseService();
+    if (isCloudSyncReady()) {
+      setIsCloudReady(true);
+      startRealtimeListeners(handleCloudIncomingUpdate);
+    }
+    return () => {
+      stopRealtimeListeners();
+    };
+  }, [isDbReady, handleCloudIncomingUpdate]);
+
   return (
     <AppContext.Provider
       value={{
@@ -703,7 +959,15 @@ export function AppProvider({ children }) {
         restoreSqliteBackup,
         resetToFactoryDemo,
         reloadFromDb,
-        getTodayStr
+        getTodayStr,
+        // Live Multi-Device Cloud Sync
+        isCloudReady,
+        cloudShopCode,
+        deviceRole,
+        lastCloudSyncTime,
+        syncCloudNow,
+        updateCloudSyncSettings,
+        getStoredFirebaseConfig
       }}
     >
       {children}

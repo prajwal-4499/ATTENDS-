@@ -20,7 +20,18 @@ import {
   Layers,
   Timer,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Cloud,
+  Settings,
+  Smartphone,
+  Monitor,
+  Check,
+  ExternalLink,
+  HelpCircle,
+  Wifi,
+  XCircle,
+  Key,
+  X
 } from 'lucide-react';
 
 export default function BackupSync() {
@@ -37,7 +48,15 @@ export default function BackupSync() {
     autoBackupHistory,
     executeAutoBackup,
     restoreAutoBackupSnapshot,
-    showToast
+    showToast,
+    // Live Cloud Sync Context
+    isCloudReady,
+    cloudShopCode,
+    deviceRole,
+    lastCloudSyncTime,
+    syncCloudNow,
+    updateCloudSyncSettings,
+    getStoredFirebaseConfig
   } = useApp();
 
   const fileInputRef = useRef(null);
@@ -45,6 +64,16 @@ export default function BackupSync() {
   const [queryResult, setQueryResult] = useState(null);
   const [queryError, setQueryError] = useState('');
   const [shopModalOpen, setShopModalOpen] = useState(false);
+
+  // Cloud Sync Modal & Form state
+  const [showCloudConfigModal, setShowCloudConfigModal] = useState(false);
+  const [syncCodeInput, setSyncCodeInput] = useState(cloudShopCode || (shopProfile?.shop_name ? shopProfile.shop_name.toUpperCase().replace(/[^A-Z0-9]/g, '-') : 'ATTENDS-SHOP-01'));
+  const [roleInput, setRoleInput] = useState(deviceRole || 'owner');
+  const [rawConfigText, setRawConfigText] = useState(() => {
+    const existing = getStoredFirebaseConfig();
+    return existing ? JSON.stringify(existing, null, 2) : '';
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Execute raw SQL in console
   const handleRunSql = () => {
@@ -126,6 +155,58 @@ export default function BackupSync() {
     }
   };
 
+  // Trigger manual cloud sync
+  const handleTriggerSync = async () => {
+    setIsSyncing(true);
+    await syncCloudNow();
+    setIsSyncing(false);
+  };
+
+  // Save Cloud Configuration & Shop Code
+  const handleSaveCloudConfig = async (e) => {
+    e.preventDefault();
+    try {
+      let parsedConfig = null;
+      if (rawConfigText.trim()) {
+        try {
+          parsedConfig = JSON.parse(rawConfigText.trim());
+        } catch (jsonErr) {
+          // If user pasted JS format: apiKey: "...", projectId: "..."
+          const matchApiKey = rawConfigText.match(/apiKey:\s*["']([^"']+)["']/);
+          const matchProjectId = rawConfigText.match(/projectId:\s*["']([^"']+)["']/);
+          const matchAuthDomain = rawConfigText.match(/authDomain:\s*["']([^"']+)["']/);
+          const matchStorageBucket = rawConfigText.match(/storageBucket:\s*["']([^"']+)["']/);
+          const matchMessagingSenderId = rawConfigText.match(/messagingSenderId:\s*["']([^"']+)["']/);
+          const matchAppId = rawConfigText.match(/appId:\s*["']([^"']+)["']/);
+
+          if (matchApiKey && matchProjectId) {
+            parsedConfig = {
+              apiKey: matchApiKey[1],
+              authDomain: matchAuthDomain ? matchAuthDomain[1] : undefined,
+              projectId: matchProjectId[1],
+              storageBucket: matchStorageBucket ? matchStorageBucket[1] : undefined,
+              messagingSenderId: matchMessagingSenderId ? matchMessagingSenderId[1] : undefined,
+              appId: matchAppId ? matchAppId[1] : undefined
+            };
+          } else {
+            showToast('Could not parse Firebase config. Please paste valid JSON or config object.', 'error');
+            return;
+          }
+        }
+      }
+
+      await updateCloudSyncSettings({
+        config: parsedConfig,
+        shopCode: syncCodeInput.trim().toUpperCase(),
+        role: roleInput
+      });
+
+      setShowCloudConfigModal(false);
+    } catch (err) {
+      showToast('Error saving sync configuration: ' + err.message, 'error');
+    }
+  };
+
   return (
     <div>
       <div className="attendance-header-actions">
@@ -134,6 +215,112 @@ export default function BackupSync() {
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
             Automated local snapshots and manual SQLite / JSON exports.
           </p>
+        </div>
+      </div>
+
+      {/* ── LIVE MULTI-DEVICE CLOUD SYNC CARD (FEATURED) ────────────────── */}
+      <div className="card" style={{
+        marginBottom: '1.5rem',
+        border: isCloudReady ? '1.5px solid var(--accent-success)' : '1px solid var(--border-default)',
+        background: 'var(--bg-card)',
+        boxShadow: isCloudReady ? '0 4px 20px rgba(16, 185, 129, 0.12)' : 'var(--shadow-sm)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: 'var(--radius-md)',
+              background: isCloudReady ? 'var(--accent-success-subtle)' : 'var(--accent-primary-subtle)',
+              color: isCloudReady ? 'var(--accent-success)' : 'var(--accent-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Cloud size={26} />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>
+                  Live Multi-Device Cloud Sync
+                </h3>
+                <span
+                  className={isCloudReady ? 'badge badge-success' : 'badge badge-warning'}
+                  style={{ fontSize: '0.75rem', fontWeight: 700 }}
+                >
+                  {isCloudReady ? '🟢 Real-Time Sync Active' : '⚪ Setup Required (100% Free)'}
+                </span>
+              </div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0' }}>
+                Synchronize changes instantly between <strong>Desktop (Owner)</strong> and <strong>Mobile (Manager)</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+            {isCloudReady && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleTriggerSync}
+                disabled={isSyncing}
+                style={{ padding: '0.55rem 1rem', fontSize: '0.85rem' }}
+              >
+                <RefreshCw size={15} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
+                <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowCloudConfigModal(true)}
+              style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <Settings size={15} />
+              <span>{isCloudReady ? 'Manage Sync & Shop Code' : 'Connect Firebase (Free)'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sync Info Pill Row */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '0.75rem',
+          padding: '0.85rem 1rem',
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)',
+          fontSize: '0.82rem'
+        }}>
+          <div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>
+              Shop Sync Code
+            </div>
+            <div style={{ fontWeight: 800, fontFamily: 'var(--font-mono)', fontSize: '0.95rem', color: 'var(--accent-primary)', marginTop: '0.15rem' }}>
+              {cloudShopCode || 'Not Set (Click Connect)'}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>
+              Device Role
+            </div>
+            <div style={{ fontWeight: 700, marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              {deviceRole === 'owner' ? <Monitor size={15} color="var(--accent-purple)" /> : <Smartphone size={15} color="var(--accent-success)" />}
+              <span style={{ textTransform: 'capitalize' }}>{deviceRole}</span>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>
+              Last Cloud Sync
+            </div>
+            <div style={{ fontWeight: 600, marginTop: '0.15rem', color: lastCloudSyncTime ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              {lastCloudSyncTime ? new Date(lastCloudSyncTime).toLocaleTimeString() : 'Never'}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -526,6 +713,224 @@ export default function BackupSync() {
         onClose={() => setShopModalOpen(false)}
         isInitial={false}
       />
+
+      {/* Cloud Sync Configuration Modal */}
+      {showCloudConfigModal && (
+        <div className="modal-overlay" style={{ zIndex: 99999 }}>
+          <div
+            className="modal-content"
+            style={{
+              maxWidth: '560px',
+              padding: '1.75rem',
+              borderRadius: 'var(--radius-xl)',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, rgba(37,99,235,0.15) 0%, rgba(99,102,241,0.15) 100%)',
+                  color: 'var(--accent-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Cloud size={24} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
+                    Live Multi-Device Cloud Sync
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0' }}>
+                    Sync Desktop &amp; Mobile seamlessly (100% Free Firebase)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setShowCloudConfigModal(false)}
+                style={{ borderRadius: '50%', padding: '0.4rem' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCloudConfig}>
+              {/* Step 1: Shop Sync Code */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem' }}>
+                  Shop Sync Code (Shared Secret) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={syncCodeInput}
+                  onChange={(e) => setSyncCodeInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. ATTENDS-SHOP-01"
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.9rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1.5px solid var(--border-color)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)'
+                  }}
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                  Enter the <strong>exact same code</strong> on Owner desktop and Manager mobile app so they sync into the same shop database.
+                </p>
+              </div>
+
+              {/* Step 2: Device Role */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem' }}>
+                  This Device's Role
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div
+                    onClick={() => setRoleInput('owner')}
+                    style={{
+                      padding: '0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: roleInput === 'owner' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                      background: roleInput === 'owner' ? 'var(--accent-primary-subtle)' : 'var(--bg-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem'
+                    }}
+                  >
+                    <Monitor size={20} color={roleInput === 'owner' ? 'var(--accent-primary)' : 'var(--text-secondary)'} />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: roleInput === 'owner' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>
+                        Owner (Desktop / Admin)
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Full access &amp; monitoring</div>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setRoleInput('manager')}
+                    style={{
+                      padding: '0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: roleInput === 'manager' ? '2px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                      background: roleInput === 'manager' ? 'var(--accent-primary-subtle)' : 'var(--bg-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem'
+                    }}
+                  >
+                    <Smartphone size={20} color={roleInput === 'manager' ? 'var(--accent-primary)' : 'var(--text-secondary)'} />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: roleInput === 'manager' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>
+                        Manager (Mobile / Shop)
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Daily punch &amp; production</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Firebase Config */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                    Firebase Web Config (JSON or JS Object)
+                  </label>
+                  <a
+                    href="https://console.firebase.google.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--accent-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      textDecoration: 'none',
+                      fontWeight: 600
+                    }}
+                  >
+                    <span>Firebase Console</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+
+                <div style={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.75rem 0.85rem',
+                  fontSize: '0.76rem',
+                  lineHeight: '1.45',
+                  color: 'var(--text-secondary)',
+                  marginBottom: '0.6rem'
+                }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <HelpCircle size={14} color="var(--accent-primary)" />
+                    <span>How to get free Firebase Config in 2 minutes:</span>
+                  </div>
+                  <ol style={{ paddingLeft: '1.1rem', margin: 0 }}>
+                    <li>Go to <strong>console.firebase.google.com</strong> &amp; click <strong>Add Project</strong> (named ATTENDS).</li>
+                    <li>Click <strong>Firestore Database</strong> &rarr; <strong>Create Database</strong> (select "Start in test mode").</li>
+                    <li>Go to <strong>Project Settings</strong> (gear icon) &rarr; under <em>"Your apps"</em> click <strong>Web</strong> (<code>&lt;/&gt;</code>).</li>
+                    <li>Copy the <code>const firebaseConfig = &#123; ... &#125;;</code> code and paste it below.</li>
+                  </ol>
+                </div>
+
+                <textarea
+                  rows={6}
+                  value={rawConfigText}
+                  onChange={(e) => setRawConfigText(e.target.value)}
+                  placeholder={`{\n  "apiKey": "AIzaSy...",\n  "authDomain": "attends-xyz.firebaseapp.com",\n  "projectId": "attends-xyz",\n  "storageBucket": "attends-xyz.appspot.com",\n  "messagingSenderId": "...",\n  "appId": "1:..."\n}`}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1.5px solid var(--border-color)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowCloudConfigModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
+                >
+                  <Cloud size={16} />
+                  <span>Save &amp; Connect Sync</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

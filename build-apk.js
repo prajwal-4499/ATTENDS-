@@ -192,10 +192,11 @@ if (!fs.existsSync(DIST_APK_DIR)) {
   fs.mkdirSync(DIST_APK_DIR, { recursive: true });
 }
 
-const finalApkPath = path.join(DIST_APK_DIR, 'EkdantAttendance.apk');
+const finalApkPath = path.join(DIST_APK_DIR, 'ATTENDS.apk');
 
 if (fs.existsSync(rawApkPath)) {
   fs.copyFileSync(rawApkPath, finalApkPath);
+  fs.copyFileSync(rawApkPath, path.join(DIST_APK_DIR, 'EkdantAttendance.apk'));
   fs.copyFileSync(rawApkPath, path.join(DIST_APK_DIR, 'app-debug.apk'));
 }
 
@@ -227,7 +228,7 @@ if (apkExists) {
   console.log(C.cyan('  APK Location : ') + C.bold(finalApkPath));
   console.log('\n  To install directly onto a connected phone:');
   console.log(C.bold(`    adb install "${finalApkPath}"`));
-  console.log('\n  Or transfer EkdantAttendance.apk to your Android phone.');
+  console.log('\n  Or transfer ATTENDS.apk to your Android phone.');
 } else {
   warn('APK build output was not found. Please review Gradle logs above.');
 }
