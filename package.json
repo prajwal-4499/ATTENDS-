@@ -28,16 +28,17 @@
     "electron-builder": "^26.15.3",
     "vite": "^6.2.0"
   },
-  "main": "electron-main.js",
+  "main": "electron-main.cjs",
   "build": {
-    "appId": "com.ekdant.attendance",
-    "productName": "EkdantAttendance",
-    "copyright": "Copyright 2024 Ekdant Shop",
+    "appId": "com.attends.app",
+    "productName": "ATTENDS",
+    "copyright": "Copyright 2024 ATTENDS",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
       "dist/**/*",
+      "electron-main.cjs",
       "electron-main.js"
     ],
     "win": {

@@ -1,5 +1,9 @@
-const { app, BrowserWindow, shell } = require('electron');
-const path = require('path');
+import { app, BrowserWindow, shell } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -7,8 +11,8 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    title: 'Ekdant Attendance & Payroll',
-    icon: path.join(__dirname, 'dist', 'favicon.ico'),
+    title: 'ATTENDS - Attendance & Payroll',
+    icon: path.join(__dirname, 'dist', 'logo.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

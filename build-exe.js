@@ -49,7 +49,7 @@ run('npm run build');
 ok('Vite build complete -> dist/');
 
 // ─── Step 3: Create Electron main process file ───────────────────────────────
-console.log('\n' + C.bold('-- Step 3/5  Writing electron-main.js --'));
+console.log('\n' + C.bold('-- Step 3/5  Writing electron-main.cjs --'));
 
 const electronMain = `
 const { app, BrowserWindow, shell } = require('electron');
@@ -61,8 +61,8 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    title: 'Ekdant Attendance & Payroll',
-    icon: path.join(__dirname, 'dist', 'favicon.ico'),
+    title: 'ATTENDS - Attendance & Payroll',
+    icon: path.join(__dirname, 'dist', 'logo.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -90,8 +90,8 @@ app.on('window-all-closed', () => {
 });
 `.trim();
 
-fs.writeFileSync(path.join(ROOT, 'electron-main.js'), electronMain + '\n');
-ok('electron-main.js created');
+fs.writeFileSync(path.join(ROOT, 'electron-main.cjs'), electronMain + '\n');
+ok('electron-main.cjs created');
 
 // ─── Step 4: Inject electron config into package.json ────────────────────────
 console.log('\n' + C.bold('-- Step 4/5  Updating package.json with electron-builder config --'));
@@ -99,19 +99,19 @@ console.log('\n' + C.bold('-- Step 4/5  Updating package.json with electron-buil
 const pkgPath = path.join(ROOT, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
-pkg.main = 'electron-main.js';
+pkg.main = 'electron-main.cjs';
 pkg.scripts = pkg.scripts || {};
 pkg.scripts['electron'] = 'electron .';
 
 pkg.build = {
-  appId        : 'com.ekdant.attendance',
-  productName  : 'EkdantAttendance',
-  copyright    : 'Copyright 2024 Ekdant Shop',
+  appId        : 'com.attends.app',
+  productName  : 'ATTENDS',
+  copyright    : 'Copyright 2024 ATTENDS',
   directories  : { output: 'dist-electron' },
-  files        : ['dist/**/*', 'electron-main.js'],
+  files        : ['dist/**/*', 'electron-main.cjs', 'electron-main.js'],
   win: {
     target     : [{ target: 'nsis', arch: ['x64'] }],
-    icon       : 'public/favicon.ico',
+    icon       : 'build/icon.png',
   },
   nsis: {
     oneClick         : false,
