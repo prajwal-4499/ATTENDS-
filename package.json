@@ -50,7 +50,7 @@
           ]
         }
       ],
-      "icon": "public/favicon.ico"
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,

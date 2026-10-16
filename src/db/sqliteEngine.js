@@ -147,20 +147,20 @@ export async function initDatabase() {
   try {
     SQL = await initSqlJs({
       locateFile: (file) => {
-        // If sql.js requests sql-wasm-browser.wasm or sql-wasm.wasm
-        return `/${file}`;
+        // Support file:// protocol (Electron) and http(s):// (Web & mobile)
+        return `./${file}`;
       }
     });
   } catch (err) {
     console.warn('WASM initialization attempt 1 failed, trying fallback locateFile...', err);
     try {
       SQL = await initSqlJs({
-        locateFile: () => '/sql-wasm-browser.wasm'
+        locateFile: () => './sql-wasm-browser.wasm'
       });
     } catch (err2) {
       console.warn('WASM initialization attempt 2 failed, trying sql-wasm.wasm...', err2);
       SQL = await initSqlJs({
-        locateFile: () => '/sql-wasm.wasm'
+        locateFile: () => './sql-wasm.wasm'
       });
     }
   }
