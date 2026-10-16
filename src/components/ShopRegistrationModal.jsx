@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { query } from '../db/sqliteEngine';
 import { Store, Phone, User, MapPin, CheckCircle2, ShieldCheck, Sparkles, X, Clock, ToggleLeft, ToggleRight, Cloud, RefreshCw } from 'lucide-react';
 
 export default function ShopRegistrationModal({ isOpen, onClose, isInitial = false }) {
@@ -56,12 +57,17 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
     setError('');
     setIsSyncingCloud(true);
     try {
-      if (syncCode.trim()) {
-        await updateCloudSyncSettings({ shopCode: syncCode.trim().toUpperCase(), role: 'owner' });
-      }
-      const success = await syncCloudNow();
-      if (!success) {
-        setError('Could not connect to cloud. Please check internet connection.');
+      const code = syncCode.trim().toUpperCase() || 'ATTENDS-MAIN';
+      await updateCloudSyncSettings({ shopCode: code, role: 'owner' });
+      await syncCloudNow();
+
+      // Check if shop_profile was populated into SQLite
+      const existing = query("SELECT * FROM shop_profile LIMIT 1");
+      if (existing && existing.length > 0 && existing[0].shop_name) {
+        showToast('✓ Synced with ' + existing[0].shop_name + '!');
+        if (onClose) onClose();
+      } else {
+        setError('No shop profile uploaded yet for ' + code + '. Please open ATTENDS on your mobile phone to let it upload your shop details, then click Sync again.');
       }
     } catch (e) {
       setError('Sync failed: ' + e.message);
@@ -95,7 +101,7 @@ export default function ShopRegistrationModal({ isOpen, onClose, isInitial = fal
               overflow: 'hidden'
             }}>
               <img
-                src="/logo.png"
+                src="./logo.png"
                 alt="Logo"
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               />

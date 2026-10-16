@@ -50,7 +50,7 @@ export default function Header() {
         >
           <div className="brand-icon" style={{ background: 'transparent', boxShadow: 'none', padding: 0 }}>
             <img
-              src="/logo.png"
+              src="./logo.png"
               alt="Logo"
               style={{
                 height: '38px',

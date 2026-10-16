@@ -838,14 +838,14 @@ export function AppProvider({ children }) {
   }, [reloadFromDb, getTodayStr]);
 
   // Two-way manual sync now
-  const syncCloudNow = useCallback(async () => {
+  const syncCloudNow = useCallback(async (silent = false) => {
     if (!isCloudSyncReady()) {
-      showToast('Please configure Firebase and Shop Code in Settings first', 'error');
+      if (!silent) showToast('Please configure Firebase and Shop Code in Settings first', 'error');
       return false;
     }
 
     try {
-      showToast('Syncing with cloud...', 'info');
+      if (!silent) showToast('Syncing with cloud...', 'info');
       const localStaff = query("SELECT * FROM staff");
       const localAtt = query("SELECT * FROM attendance");
       const localLedger = query("SELECT * FROM salary_ledger");
@@ -874,14 +874,14 @@ export function AppProvider({ children }) {
 
         setLastCloudSyncTime(result.timestamp);
         setIsCloudReady(true);
-        showToast('✓ Real-time sync complete between devices!');
+        if (!silent) showToast('✓ Real-time sync complete between devices!');
         return true;
       } else {
-        showToast('Sync failed: ' + result.message, 'error');
+        if (!silent) showToast('Sync failed: ' + result.message, 'error');
         return false;
       }
     } catch (err) {
-      showToast('Cloud sync error: ' + err.message, 'error');
+      if (!silent) showToast('Cloud sync error: ' + err.message, 'error');
       return false;
     }
   }, [handleCloudIncomingUpdate, showToast]);
@@ -908,18 +908,20 @@ export function AppProvider({ children }) {
     }
   }, [handleCloudIncomingUpdate, syncCloudNow, showToast]);
 
-  // Auto-start listeners on mount
+  // Auto-start listeners & background sync on mount
   useEffect(() => {
     if (!isDbReady) return;
     initFirebaseService();
     if (isCloudSyncReady()) {
       setIsCloudReady(true);
       startRealtimeListeners(handleCloudIncomingUpdate);
+      // Auto push/pull on launch so mobile pushes its shop data immediately
+      syncCloudNow(true);
     }
     return () => {
       stopRealtimeListeners();
     };
-  }, [isDbReady, handleCloudIncomingUpdate]);
+  }, [isDbReady, handleCloudIncomingUpdate, syncCloudNow]);
 
   return (
     <AppContext.Provider
