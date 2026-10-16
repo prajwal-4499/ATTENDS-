@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "build:exe": "node build-exe.cjs",
-    "build:apk": "node build-apk.cjs",
+    "build:exe": "node build-exe.js",
+    "build:apk": "node build-apk.js",
     "electron": "electron ."
   },
   "dependencies": {
